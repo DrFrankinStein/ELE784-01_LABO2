@@ -54,10 +54,10 @@ struct Camera_Dev
 struct file_operations ele784_fops = 
 {
     .owner  =   THIS_MODULE,
-    .open     =   buf_open,
-    .release  =   buf_release, //"close"
-    .read     =   buf_read,
-    .unlocked_ioctl = buf_ioctl,
+    .open     =   ele784_open,
+    .release  =   ele784_release, //"close"
+    .read     =   ele784_read,
+    .unlocked_ioctl = ele784_ioctl,
 };
 
 //===================================================
