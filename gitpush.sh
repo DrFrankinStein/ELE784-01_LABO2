@@ -7,9 +7,14 @@ git commit -m "$title" -m "$text"
 #read -e -i "master" -p "Select branch to commit > " branch
 #git push origin ${branch:-master}
 
-read -rp "Do you want to send commit to GitHub now? (Y/n) : " -ei "Y" key
+while true
+do
+read -rp "Do you want to send commit to GitHub now? (Y/n) : " key
 
-if ($key)
-	then git push origin master
-fi
+case $key in
+y|Y) git push origin master
+     exit;;
+n|N) exit;;
+esac
+done
 
