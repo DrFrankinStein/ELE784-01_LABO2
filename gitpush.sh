@@ -1,6 +1,6 @@
 #!/bin/bash
 
-git add *
+git add --all
 read -p "Commit Title > " title
 read -p "Commit Description (Optional) > " text
 git commit -m "$title" -m "$text"
