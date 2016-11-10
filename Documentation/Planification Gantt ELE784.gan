@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?><project name="ELE784" company="" webLink="http://" view-date="2016-10-30" view-index="0" gantt-divider-location="538" resource-divider-location="300" version="2.8.1" locale="en_US">
+    <description/>
+    <view zooming-state="default:5" id="gantt-chart">
+        <field id="tpd3" name="Name" width="316" order="0"/>
+        <field id="tpd4" name="Begin date" width="113" order="1"/>
+        <field id="tpd5" name="End date" width="89" order="2"/>
+        <option id="taskLabelUp" value=""/>
+        <timeline><![CDATA[2]]></timeline>
+        <option id="color.recent"><![CDATA[#000000 #006666]]></option>
+    </view>
+    <view id="resource-table">
+        <field id="0" name="Name" width="211" order="0"/>
+        <field id="1" name="Default role" width="86" order="1"/>
+    </view>
+    <!-- -->
+    <calendars base-id="none">
+        <day-types>
+            <day-type id="0"/>
+            <day-type id="1"/>
+            <default-week id="1" name="default" sun="1" mon="0" tue="0" wed="0" thu="0" fri="0" sat="1"/>
+            <only-show-weekends value="true"/>
+            <overriden-day-types/>
+            <days/>
+        </day-types>
+    </calendars>
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="default" valuetype="icon"/>
+            <taskproperty id="tpd1" name="priority" type="default" valuetype="icon"/>
+            <taskproperty id="tpd2" name="info" type="default" valuetype="icon"/>
+            <taskproperty id="tpd3" name="name" type="default" valuetype="text"/>
+            <taskproperty id="tpd4" name="begindate" type="default" valuetype="date"/>
+            <taskproperty id="tpd5" name="enddate" type="default" valuetype="date"/>
+            <taskproperty id="tpd6" name="duration" type="default" valuetype="int"/>
+            <taskproperty id="tpd7" name="completion" type="default" valuetype="int"/>
+            <taskproperty id="tpd8" name="coordinator" type="default" valuetype="text"/>
+            <taskproperty id="tpd9" name="predecessorsr" type="default" valuetype="text"/>
+        </taskproperties>
+        <task id="0" name="Début" color="#000000" meeting="true" start="2016-11-03" duration="0" complete="0" expand="true">
+            <depend id="5" type="2" difference="0" hardness="Strong"/>
+        </task>
+        <task id="5" name="Planification" color="#8cb6ce" meeting="false" start="2016-11-03" duration="1" complete="100" expand="true">
+            <depend id="275" type="2" difference="0" hardness="Strong"/>
+        </task>
+        <task id="275" name="Mise en place du Git" color="#8cb6ce" meeting="false" start="2016-11-04" duration="4" complete="100" expand="true">
+            <depend id="71" type="2" difference="0" hardness="Strong"/>
+        </task>
+        <task id="71" name="Phase 1 : Base du module" color="#000000" meeting="false" start="2016-11-08" duration="6" complete="96" thirdDate="2016-11-04" thirdDate-constraint="0" expand="true">
+            <depend id="129" type="2" difference="0" hardness="Strong"/>
+            <task id="72" name="Base de init()" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            <task id="73" name="Base de cleanup()" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            <task id="76" name="Base de open()" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            <task id="78" name="Base de close()" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            <task id="80" name="Base de read()" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            <task id="82" name="Base de ioctl()" color="#000000" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true">
+                <depend id="358" type="2" difference="0" hardness="Strong"/>
+                <task id="84" name="Base de IOCTL_GET" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="86" name="Base de IOCTL_SET" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="88" name="Base de IOCTL_STREAMON" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="90" name="Base de IOCTL_STREAMOFF" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="92" name="Base de IOCTL_GRAB" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="94" name="Base de IOCTL_PANTILT" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+                <task id="96" name="Base de IOCTL_PANTILT_RESET" color="#8cb6ce" meeting="false" start="2016-11-08" duration="5" complete="100" expand="true"/>
+            </task>
+            <task id="358" name="Application Test IOCTL" color="#8cb6ce" meeting="false" start="2016-11-13" duration="1" complete="0" expand="true"/>
+        </task>
+        <task id="129" name="Phase 2 : Initialisation avec USB" color="#000000" meeting="false" start="2016-11-14" duration="7" complete="0" thirdDate="2016-11-10" thirdDate-constraint="0" expand="true">
+            <depend id="218" type="2" difference="0" hardness="Strong"/>
+            <task id="130" name="USB dans init()" color="#8cb6ce" meeting="false" start="2016-11-14" duration="2" complete="0" expand="true">
+                <depend id="132" type="2" difference="0" hardness="Strong"/>
+                <depend id="133" type="2" difference="0" hardness="Strong"/>
+                <depend id="135" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="131" name="USB dans cleanup()" color="#8cb6ce" meeting="false" start="2016-11-14" duration="1" complete="0" expand="true">
+                <depend id="132" type="2" difference="0" hardness="Strong"/>
+                <depend id="133" type="2" difference="0" hardness="Strong"/>
+                <depend id="135" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="132" name="Implémentation probe()" color="#8cb6ce" meeting="false" start="2016-11-16" duration="3" complete="0" expand="true">
+                <depend id="134" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="133" name="Implémentation disconnect()" color="#8cb6ce" meeting="false" start="2016-11-16" duration="1" complete="0" expand="true">
+                <depend id="134" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="134" name="USB dans open()" color="#8cb6ce" meeting="false" start="2016-11-19" duration="1" complete="0" expand="true"/>
+            <task id="135" name="Implémentation ioctl()" color="#000000" meeting="false" start="2016-11-16" duration="5" complete="0" expand="true">
+                <task id="136" name="Implémentation IOCTL_STREAMON" color="#8cb6ce" meeting="false" start="2016-11-16" duration="5" complete="0" expand="true"/>
+                <task id="137" name="Implémentation IOCTL_STREAMOFF" color="#8cb6ce" meeting="false" start="2016-11-16" duration="5" complete="0" expand="true"/>
+                <task id="138" name="Implémentation IOCTL_PANTILT" color="#8cb6ce" meeting="false" start="2016-11-16" duration="5" complete="0" expand="true"/>
+                <task id="139" name="Implémentation IOCTL_PANTILT_RESET" color="#8cb6ce" meeting="false" start="2016-11-16" duration="5" complete="1" expand="true"/>
+            </task>
+        </task>
+        <task id="218" name="Phase 3 : Blitz final" color="#000000" meeting="false" start="2016-11-21" duration="15" complete="0" expand="true">
+            <depend id="271" type="2" difference="0" hardness="Strong"/>
+            <task id="219" name="probe() : ajout usb_set_interface" color="#8cb6ce" meeting="false" start="2016-11-21" duration="1" complete="0" expand="true">
+                <depend id="220" type="2" difference="0" hardness="Strong"/>
+                <depend id="223" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="220" name="Implémentation IOCTL_GRAB" color="#8cb6ce" meeting="false" start="2016-11-22" duration="4" complete="0" expand="true">
+                <depend id="226" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="223" name="URB Callback" color="#8cb6ce" meeting="false" start="2016-11-22" duration="4" complete="0" expand="true">
+                <depend id="226" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="226" name="Implémentation de read()" color="#8cb6ce" meeting="false" start="2016-11-26" duration="3" complete="0" expand="true">
+                <depend id="267" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="267" name="Développement programme de test" color="#8cb6ce" meeting="false" start="2016-11-29" duration="7" complete="0" expand="true"/>
+        </task>
+        <task id="271" name="Commentaire et déverminage final" color="#8cb6ce" meeting="false" start="2016-12-06" duration="7" complete="0" expand="true">
+            <depend id="2" type="2" difference="0" hardness="Rubber"/>
+        </task>
+        <task id="2" name="Fin" color="#000000" meeting="true" start="2016-12-13" duration="0" complete="0" expand="true"/>
+    </tasks>
+    <resources>
+        <resource id="0" name="Julien" function="1" contacts="" phone=""/>
+        <resource id="1" name="Thierry" function="1" contacts="" phone=""/>
+    </resources>
+    <allocations>
+        <allocation task-id="5" resource-id="0" function="1" responsible="true" load="100.0"/>
+        <allocation task-id="275" resource-id="0" function="Default:1" responsible="true" load="100.0"/>
+        <allocation task-id="71" resource-id="0" function="1" responsible="true" load="100.0"/>
+        <allocation task-id="135" resource-id="0" function="1" responsible="true" load="100.0"/>
+        <allocation task-id="71" resource-id="1" function="1" responsible="false" load="100.0"/>
+        <allocation task-id="130" resource-id="1" function="1" responsible="true" load="100.0"/>
+        <allocation task-id="131" resource-id="1" function="1" responsible="true" load="100.0"/>
+    </allocations>
+    <vacations/>
+    <previous/>
+    <roles roleset-name="Default"/>
+    <roles>
+        <role id="1" name="Programmer"/>
+    </roles>
+</project>
