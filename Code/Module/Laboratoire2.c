@@ -42,6 +42,21 @@
 
 MODULE_LICENSE("Dual BSD/GPL");
 
+// Define these values to match your devices 
+#define USB_SKEL_VENDOR_ID	0xfff0
+#define USB_SKEL_PRODUCT_ID	0xfff0
+
+// table of devices that work with this driver 
+static struct usb_device_id skel_table [] = {
+	{ USB_DEVICE(USB_SKEL_VENDOR_ID, USB_SKEL_PRODUCT_ID) },
+	{ }					// Terminating entry 
+};
+MODULE_DEVICE_TABLE (usb, skel_table);
+
+
+// Get a minor range for your devices from the usb maintainer 
+#define USB_SKEL_MINOR_BASE	192
+
 static int ele784_open (struct inode *inode, struct file *filp);
 static int ele784_release (struct inode *inode, struct file *filp);
 static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count,loff_t *f_ops);
@@ -56,11 +71,18 @@ struct Camera_Dev
     struct class    *class; //
 } CamDev;
 
+// Structure to hold all of our device specific stuff 
 struct usb_skel 
 {
-    /* One structure for each connected device */
-
+	struct usb_device      *udev;			   // the usb device for this device
+	struct usb_interface   *interface;	   // the interface for this device 
+	unsigned char          *bulk_in_buffer;// the buffer to receive data 
+	size_t			        bulk_in_size;   // the size of the receive buffer 
+	__u8			bulk_in_endpointAddr;	   // the address of the bulk in endpoint 
+	__u8			bulk_out_endpointAddr;	   // the address of the bulk out endpoint 
+	struct kref		kref;
 };
+#define to_skel_dev(d) container_of(d, struct usb_skel, kref)
 
 struct file_operations ele784_fops = 
 {
@@ -77,8 +99,8 @@ static struct usb_driver ele784_usb_driver =
     .probe       = lab2_probe,
     .disconnect  = lab2_disconnect,
  //   .fops        = &lab2_fops,
- //   .minor       = USB_SKEL_MINOR_BASE,
- //   .id_table    = skel_table,
+//	 .minor       = USB_SKEL_MINOR_BASE,
+    .id_table    = skel_table,
 };
 //===================================================
 //
@@ -243,8 +265,8 @@ static int lab2_probe(struct usb_interface *intf, const struct usb_device_id *id
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_device *udev = interface_to_usbdev(intf);
 	struct usb_skel *skeldev = NULL;
-
-	int i, int_end_size;
+	size_t buffer_size;
+	int i;
 	int retval = -ENODEV;
 
 	if (!udev)
@@ -253,6 +275,7 @@ static int lab2_probe(struct usb_interface *intf, const struct usb_device_id *id
 		return -1;
 	}
 
+	// allocate memory for our device state and initialize it 
 	skeldev = kzalloc(sizeof(struct usb_skel), GFP_KERNEL);
 	if (!skeldev)
 	{
@@ -260,37 +283,72 @@ static int lab2_probe(struct usb_interface *intf, const struct usb_device_id *id
 		return -1;
 	}
 
-    //dev->command = ML_STOP;
+	memset(skeldev, 0x00, sizeof (*skeldev));
+	kref_init(&skeldev->kref);
 
-    //init_MUTEX(&dev->sem);
-    //spin_lock_init(&dev->cmd_spinlock);
-/*
-    dev->udev = udev;
-    dev->interface = interface;
-    iface_desc = interface->cur_altsetting;
+	skeldev->udev = usb_get_dev(udev);
+	skeldev->interface = interface;
 
-    // Set up interrupt endpoint information. 
-    for (i = 0; i < intf->num_altsetting; ++i)
-    {
-        endpoint = &iface_desc->endpoint[i].desc;
+	// set up the endpoint information 
+	// use only the first bulk-in and bulk-out endpoints 
+	interface = intf->cur_altsetting;
+	for (i = 0; i < interface->desc.bNumEndpoints; ++i) 
+	{
+		endpoint = &interface->endpoint[i].desc;
 
-        if (((endpoint->bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_IN)
-                && ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
-                    USB_ENDPOINT_XFER_INT))
-            dev->int_in_endpoint = endpoint;
+		if (!skeldev->bulk_in_endpointAddr &&
+		    (endpoint->bEndpointAddress & USB_DIR_IN) &&
+		    ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
+					== USB_ENDPOINT_XFER_BULK)) 
+		{
+			// we found a bulk in endpoint 
+			buffer_size = endpoint->wMaxPacketSize;
+			skeldev->bulk_in_size = buffer_size;
+			skeldev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
+			skeldev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
+			if (!skeldev->bulk_in_buffer) 
+			{
+				printk(KERN_WARNING"Could not allocate bulk_in_buffer");
+				return -1;
+			}
+		}
 
-    }
-    if (! dev->int_in_endpoint)
-    {
-        DBG_ERR("could not find interrupt in endpoint");
-        goto error;
-    }
+		if (!skeldev->bulk_out_endpointAddr &&
+		    !(endpoint->bEndpointAddress & USB_DIR_IN) &&
+		    ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
+					== USB_ENDPOINT_XFER_BULK)) 
+		{
+			// we found a bulk out endpoint 
+			skeldev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
+		}
+	}
+	if (!(skeldev->bulk_in_endpointAddr && skeldev->bulk_out_endpointAddr)) 
+	{
+		printk(KERN_WARNING"Could not find both bulk-in and bulk-out endpoints");
+		return -1;
+	}
 
+	// save our data pointer in this interface device 
+	usb_set_intfdata(intf, skeldev);
 
-    // We can register the device now, as it is ready. 
-    retval = usb_register_dev(interface, &ml_class);
-*/
+	// we can register the device now, as it is ready 
+	retval = usb_register_dev(intf, &ele784_usb_driver);
+	if (retval) 
+	{
+		// something prevented us from registering this driver 
+		printk(KERN_WARNING"Not able to get a minor for this device.");
+		usb_set_intfdata(intf, NULL);
+		return -1;
+	}
+
+	// let the user know what node this device is now attached to 
+	printk(KERN_WARNING"USB Skeleton device now attached to USBSkel-%d", intf->minor);
 	return 0;
+/*
+error:
+	if (dev)
+		kref_put(&dev->kref, skel_delete);
+	return 0;*/
 }
 
 static void lab2_disconnect(struct usb_interface *interface)
