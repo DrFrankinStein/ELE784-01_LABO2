@@ -37,12 +37,17 @@
 
 #include "../Include/Laboratoire2.h"
 
+
+#include <linux/usb.h>
+
 MODULE_LICENSE("Dual BSD/GPL");
 
 static int ele784_open (struct inode *inode, struct file *filp);
 static int ele784_release (struct inode *inode, struct file *filp);
 static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count,loff_t *f_ops);
 static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg);
+static int lab2_probe(struct usb_interface *interface, const struct usb_device_id *id);
+static void lab2_disconnect(struct usb_interface *interface);
 
 struct Camera_Dev 
 {
@@ -53,13 +58,22 @@ struct Camera_Dev
 
 struct file_operations ele784_fops = 
 {
-    .owner  =   THIS_MODULE,
+    .owner    =   THIS_MODULE,
     .open     =   ele784_open,
     .release  =   ele784_release, //"close"
     .read     =   ele784_read,
     .unlocked_ioctl = ele784_ioctl,
 };
 
+static struct usb_driver ele784_usb_driver = 
+{
+    .name        = "lab2_usb",
+    .probe       = lab2_probe,
+    .disconnect  = lab2_disconnect,
+ //   .fops        = &lab2_fops,
+ //   .minor       = USB_SKEL_MINOR_BASE,
+ //   .id_table    = skel_table,
+};
 //===================================================
 //
 // Open the driver
@@ -215,6 +229,18 @@ long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg)
 
 
 
+static int lab2_probe(struct usb_interface *interface, const struct usb_device_id *id)
+{
+    /* called when a USB device is connected to the computer. */
+
+	return 0;
+}
+
+static void lab2_disconnect(struct usb_interface *interface)
+{
+    /* called when unplugging a USB device. */
+}
+
 //===================================================
 //
 // Char driver initialization
@@ -226,6 +252,7 @@ long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg)
 static int __init ele784_init(void)
 {
     int result;
+	 int usb_result;
 
     printk(KERN_ALERT"Laboratoire2_init (%s:%u) => Let's hope this will not crash! MOM'S SPAGHETTI!!!\n", __FUNCTION__, __LINE__);
 
@@ -254,6 +281,16 @@ static int __init ele784_init(void)
     CamDev.cdev.owner = THIS_MODULE;
     
     // INIT EVERYTHING HERE!-----------------------------------------------
+   
+
+    // register this driver with the USB subsystem 
+    usb_result = usb_register(&ele784_usb_driver);
+    if (usb_result < 0) 
+    {
+       printk(KERN_WARNING"usb_register failed for the "__FILE__ "driver." "Error number %d",usb_result);
+                
+       return -EAGAIN;
+    }
 
 
     // Add the char device to the system, initialize everything before here!
@@ -288,6 +325,7 @@ static void __exit ele784_exit (void)
     class_destroy(CamDev.class);
 
     //UNINIT EVERYTHING HERE!
+    usb_deregister(&ele784_usb_driver);
 
     printk(KERN_ALERT"Laboratoire2_exit (%s:%u) => Goodbye, cruel world!!!\n", __FUNCTION__, __LINE__);
 }
@@ -299,3 +337,5 @@ module_init(ele784_init);
 //Module exiting (disinstalling) function
 module_exit(ele784_exit);
 
+// https://www.kernel.org/doc/htmldocs/writing_usb_driver/basics.html
+// http://matthias.vallentin.net/blog/2007/04/writing-a-linux-kernel-driver-for-an-unknown-usb-device/
