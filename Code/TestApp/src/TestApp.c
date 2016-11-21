@@ -6,33 +6,152 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <unistd.h>
+#include <semaphore.h>
+#include <signal.h>
+#include <string.h>
+#include <termios.h>
+#include <time.h>
 #include "Laboratoire2.h"
 
 // Command to clear the console
 #define CLR_SCREEN printf("\033[2J\033[1;1H\n")
 
-enum CommonList {Quit = -1, EmptyCmd = 0};
+#define TIMER_NS 5000000
+#define MAX_PERIOD 12000
 
-enum OptionsMainMenuList {	IoctlMenuId = EmptyCmd+1};
+enum CommonList {Quit = 'q', EmptyCmd = -1};
 
-enum OptionsIoctlMenuList {	IoctlGet = EmptyCmd+1,
+enum OptionsMainMenuList {	IoctlMenuId = 'a'};
+
+enum OptionsIoctlMenuList {	IoctlGet = 'a',
 							IoctlSet,
 							IoctlStreamOn,
 							IoctlStreamOff,
 							IoctlGrab,
 							IoctlPanTilt,
 							IoctlPanTiltReset};
+int isMainSemUsed =0;
+sem_t MainSem;
 
-void flushStdIn(void)
+struct itimerspec	NewTimer, OldTimer;
+timer_t				TimerID;
+
+struct sigaction  TimerSig, old_TimerSig;           /* definition of signal action */
+
+void SigTimerHandler (int signo)
+{
+	static int Period = 0;
+
+	if (isMainSemUsed == 1)
+	{
+		//printf("\nTimer Handler Called!");
+		sem_post(&MainSem);
+	}
+
+	Period = (Period + 1) % MAX_PERIOD;
+}
+
+int StartTimer (void)
+{
+	struct sigevent	 Sig;
+	int				 retval = 0;
+
+	memset (&TimerSig, 0, sizeof(struct sigaction));
+	TimerSig.sa_handler = SigTimerHandler;
+	if ((retval = sigaction(SIGRTMIN, &TimerSig, &old_TimerSig)) != 0)
+	{
+		printf("%s : Problème avec sigaction : retval = %d\n", __FUNCTION__, retval);
+		return retval;
+	}
+	Sig.sigev_signo  = SIGRTMIN;
+	Sig.sigev_notify = SIGEV_SIGNAL;
+	timer_create(CLOCK_MONOTONIC, &Sig, &TimerID);
+	NewTimer.it_value.tv_sec     = TIMER_NS / 1000000000L;
+	NewTimer.it_value.tv_nsec	 = TIMER_NS % 1000000000L;
+	NewTimer.it_interval.tv_sec  = TIMER_NS / 1000000000L;
+	NewTimer.it_interval.tv_nsec = TIMER_NS % 1000000000L;
+	timer_settime(TimerID, 0, &NewTimer, &OldTimer);
+
+	return retval;
+}
+
+int StopTimer (void)
+{
+	int	 retval = 0;
+
+	timer_settime(TimerID, 0, &OldTimer, NULL);
+	timer_delete(TimerID);
+	sigaction(SIGRTMIN, &old_TimerSig, NULL);
+
+	return retval;
+}
+
+int Getchar_nonblock(void) {
+	struct termios oldt, newt;
+	int    ch=-1;
+
+	tcgetattr( STDIN_FILENO, &oldt );
+	memcpy ((void *) &newt, (void *) &oldt, sizeof(struct termios));
+	newt.c_lflag &= ~( ICANON | ECHO );
+	tcsetattr( STDIN_FILENO, TCSANOW, &newt );
+	fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK | O_NDELAY);
+	ch = getchar();
+   	fcntl(STDIN_FILENO, F_SETFL, 0);
+	tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
+
+	return ch;
+}
+
+void FlushStdIn(void)
 {
 	char c;
 	while ((c = getchar()) != '\n' && c != EOF);
 }
 
-void ioctlMenu(void)
+char WaitForKeyPressed(void)
 {
-	int cmd = EmptyCmd;
+	char ch = 0;
+	//int tic = 0;
+
+	//printf("\nStarting WFKP\n");
+
+	isMainSemUsed = 1;
+	while (ch < 1)
+	{
+		if (sem_wait(&MainSem) == 0)
+		{
+			//sem_wait(&MainSem);
+			//printf("\nTic! (%i)", tic);
+			ch = Getchar_nonblock();
+			//printf("\n(%i)Value = %i",tic, ch);
+			//tic++;
+		}
+		else
+		{
+			//printf("\nsemWait error: %i",errno);
+		}
+	}
+	isMainSemUsed = 0;
+
+	//printf("\nStoping WFKP\n");
+
+	return ch;
+}
+
+void PressAnyKeyToContinue(void)
+{
+	printf("\n\nPress any key to continue...\n\n");
+
+	WaitForKeyPressed();
+}
+
+void IoctlMenu(void)
+{
+	char cmd = EmptyCmd;
 
 	while (cmd != Quit)
 	{
@@ -40,57 +159,79 @@ void ioctlMenu(void)
 
 		printf("\nIOCTL MENU :");
 
-		//int fd = open()
+		//Test if we can open port
+		int fd = open("/dev/Laboratoire2", O_RDONLY);
 
-		printf("\nPlease make a selection : \n");
-
-		printf("\n(%i) - IoctlGet", IoctlGet );
-		printf("\n(%i) - IoctlSet", IoctlSet );
-		printf("\n(%i) - IoctlStreamOn", IoctlStreamOn );
-		printf("\n(%i) - IoctlStreamOff", IoctlStreamOff );
-		printf("\n(%i) - IoctlGrab", IoctlGrab );
-		printf("\n(%i) - IoctlPanTilt", IoctlPanTilt );
-		printf("\n(%i) - IoctlPanTiltReset", IoctlPanTiltReset );
-		printf("\n(%i) - Quit", Quit);
-		printf("\n\nMake a selection : ");
-
-		if(scanf("%i", &cmd) != 1)
+		if(fd < 0)
 		{
-			cmd = 0;
+			printf("ERROR opening the driver...(%s)\n", strerror(fd));
+			PressAnyKeyToContinue();
+			return;
 		}
-		flushStdIn();
-
-		switch (cmd)
+		else
 		{
-		case IoctlGet :
+			close(fd);
 
-		break;
+			printf("\nPlease make a selection : \n");
 
-		case IoctlSet :
-		break;
+			printf("\n(%c) - IoctlGet", IoctlGet );
+			printf("\n(%c) - IoctlSet", IoctlSet );
+			printf("\n(%c) - IoctlStreamOn", IoctlStreamOn );
+			printf("\n(%c) - IoctlStreamOff", IoctlStreamOff );
+			printf("\n(%c) - IoctlGrab", IoctlGrab );
+			printf("\n(%c) - IoctlPanTilt", IoctlPanTilt );
+			printf("\n(%c) - IoctlPanTiltReset", IoctlPanTiltReset );
+			printf("\n(%c) - Quit", Quit);
+			printf("\n\nMake a selection : ");
 
-		case IoctlStreamOn :
-		break;
+			cmd = WaitForKeyPressed();
 
-		case IoctlStreamOff :
-		break;
+			switch (cmd)
+			{
+				case IoctlGet :
 
-		case IoctlGrab :
-		break;
+				break;
 
-		case IoctlPanTilt :
-		break;
+				case IoctlSet :
+				break;
 
-		case IoctlPanTiltReset :
-		break;
+				case IoctlStreamOn :
+				break;
+
+				case IoctlStreamOff :
+				break;
+
+				case IoctlGrab :
+				break;
+
+				case IoctlPanTilt :
+				break;
+
+				case IoctlPanTiltReset :
+				break;
+			}
 		}
 	}
 }
 
+void Init (void)
+{
+	sem_init(&MainSem,0,0);
+	StartTimer();
+}
+
+void Stop(void)
+{
+	sem_destroy(&MainSem);
+	StopTimer();
+	printf("\n\n");
+}
 
 int main (int argc, char *argv[])
 {
-	int cmd = EmptyCmd;
+	char cmd = EmptyCmd;
+
+	Init();
 
 	while (cmd != Quit)
 	{
@@ -99,22 +240,21 @@ int main (int argc, char *argv[])
 		printf("\nWelcome to ELE784 LABO 2 Test App!");
 		printf("\nPlease make a selection : \n");
 
-		printf("\n(%i) - IOCTL", IoctlMenuId );
-		printf("\n(%i) - Quit", Quit);
+		printf("\n(%c) - IOCTL", IoctlMenuId );
+		printf("\n(%c) - Quit", Quit);
 		printf("\n\nMake a selection : ");
-		if(scanf("%i", &cmd) != 1)
-		{
-			cmd = 0;
-		}
-		flushStdIn();
+
+		cmd = WaitForKeyPressed();
 
 		switch (cmd)
 		{
 		case IoctlMenuId:
-			ioctlMenu();
+			IoctlMenu();
 			break;
 		}
 	}
+
+	Stop();
 
 	return 0;
 }
