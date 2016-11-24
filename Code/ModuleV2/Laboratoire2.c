@@ -14,9 +14,14 @@
 // DESCRIPTION : Main code for a linux 
 //               camera char device
 //
-// LAST MODIFICATION : Friday, November 4th 2016
+// LAST MODIFICATION : Thursday, November 24th 2016
 //
 //===================================================
+
+// Define these values to match your devices 
+#define USB_CAM_VENDOR_ID		0x046d
+#define USB_CAM_PRODUCT_ID		0x08cc
+#define USB_CAM_MINOR_BASE		0
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -30,21 +35,23 @@
 #include <linux/wait.h>
 #include <linux/spinlock.h>
 #include <linux/device.h>
-#include <linux/mutex.h>    //Mutex
+#include <linux/mutex.h>
+#include <linux/usb.h>
+#include <linux/kref.h>
 
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
 
 #include "../Include/Laboratoire2.h"
 
-
-#include <linux/usb.h>
-
 MODULE_LICENSE("Dual BSD/GPL");
 
-// Define these values to match your devices 
-#define USB_CAM_VENDOR_ID	0x046d
-#define USB_CAM_PRODUCT_ID	0x08cc
+static int ele784_open (struct inode *inode, struct file *filp);
+static int ele784_release (struct inode *inode, struct file *filp);
+static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count,loff_t *f_ops);
+static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg);
+static int ele784_probe(struct usb_interface *interface, const struct usb_device_id *id);
+static void ele784_disconnect(struct usb_interface *interface);
 
 // table of devices that work with this driver 
 static struct usb_device_id camera_id [] = 
@@ -54,55 +61,46 @@ static struct usb_device_id camera_id [] =
 };
 MODULE_DEVICE_TABLE (usb, camera_id);
 
-
-// Get a minor range for your devices from the usb maintainer 
-//#define USB_SKEL_MINOR_BASE	192
-
-static int ele784_open (struct inode *inode, struct file *filp);
-static int ele784_release (struct inode *inode, struct file *filp);
-static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count,loff_t *f_ops);
-static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg);
-static int lab2_probe(struct usb_interface *interface, const struct usb_device_id *id);
-static void lab2_disconnect(struct usb_interface *interface);
-
-struct Camera_Dev 
+// Implemented function for USB driver
+static struct usb_driver ele784_usb_driver = 
 {
-    dev_t           dev;    //Device informations
-    struct cdev     cdev;   //
-    struct class    *class; //
-} CamDev;
+	.owner    	= THIS_MODULE,
+	.name       = "OrbiteCam",
+	.id_table   = camera_id,
+	.probe      = ele784_probe,
+	.disconnect = ele784_disconnect,
+};
+
+static struct file_operations ele784_fops = 
+{
+	.owner    			= THIS_MODULE,
+	.open     			= ele784_open,
+	.release  			= ele784_release, //"close"
+	.read     			= ele784_read,
+	.unlocked_ioctl 	= ele784_ioctl,
+};
+
+static struct usb_class_driver skel_class = {
+	.name = "etsele_cdev%d",
+	.fops = &ele784_fops,
+	.minor_base = USB_CAM_MINOR_BASE,
+};
 
 // Structure to hold all of our device specific stuff 
-struct usb_skel 
+struct usb_ele784
 {
-	struct usb_device      *udev;			   // the usb device for this device
-	struct usb_interface   *interface;	   // the interface for this device 
-	unsigned char          *bulk_in_buffer;// the buffer to receive data 
-	size_t			        bulk_in_size;   // the size of the receive buffer 
-	__u8			bulk_in_endpointAddr;	   // the address of the bulk in endpoint 
-	__u8			bulk_out_endpointAddr;	   // the address of the bulk out endpoint 
-	struct kref		kref;
+	struct usb_device    	*dev;			   				// the usb device for this device
+	struct usb_interface 	*interface;	   				// the interface for this device 
+	unsigned char        	*bulk_in_buffer;				// the buffer to receive data 
+	size_t			      	bulk_in_size;   				// the size of the receive buffer 
+	__u8							bulk_in_endpointAddr;	   // the address of the bulk in endpoint 
+	__u8							bulk_out_endpointAddr;	   // the address of the bulk out endpoint 
+	struct kref					kref;
 };
 #define to_skel_dev(d) container_of(d, struct usb_skel, kref)
 
-struct file_operations ele784_fops = 
-{
-    .owner    =   THIS_MODULE,
-    .open     =   ele784_open,
-    .release  =   ele784_release, //"close"
-    .read     =   ele784_read,
-    .unlocked_ioctl = ele784_ioctl,
-};
 
-static struct usb_driver ele784_usb_driver = 
-{
-    .name        = "lab2_usb",
-    .probe       = lab2_probe,
-    .disconnect  = lab2_disconnect,
-//  .fops        = &lab2_fops,
-//	 .minor       = USB_SKEL_MINOR_BASE,
-    .id_table    = camera_id,
-};
+
 //===================================================
 //
 // Open the driver
@@ -258,103 +256,105 @@ long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg)
 
 
 
-static int lab2_probe(struct usb_interface *intf, const struct usb_device_id *id)
+static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *id)
 {
-    /* called when a USB device is connected to the computer. */
+	// called when a USB device is connected to the computer.
 
 	struct usb_host_interface *interface;
 	struct usb_endpoint_descriptor *endpoint;
-	struct usb_device *udev = interface_to_usbdev(intf);
-	struct usb_skel *skeldev = NULL;
-	size_t buffer_size;
+	struct usb_ele784 *dev = NULL;
+	int retval = 0;
 	int i;
-	int retval = -ENODEV;
-
-	if (!udev)
-	{
-		printk(KERN_WARNING"udev est null");
-		return -1;
-	}
 
 	// allocate memory for our device state and initialize it 
-	skeldev = kzalloc(sizeof(struct usb_skel), GFP_KERNEL);
-	if (!skeldev)
+	dev = kzalloc(sizeof(struct usb_ele784), GFP_KERNEL);
+	if (skeldev == NULL)
 	{
-		printk(KERN_WARNING"skeldev est null");
-		return -1;
+		printk(KERN_WARNING"Out of memory (%s:%s)\n",__FUNCTION__, __LINE__);
+		retval = -ENOMEM;
 	}
-
-	memset(skeldev, 0x00, sizeof (*skeldev));
-	kref_init(&skeldev->kref);
-
-	skeldev->udev = usb_get_dev(udev);
-	skeldev->interface = interface;
+	if (retval >= 0)
+	{
+		kref_init(&dev->kref);
+		dev->dev = usb_get_dev(interface_to_usbdev(intf));
+		dev->interface = interface;
+		interface = intf->cur_altsetting;
+	}
 
 	// set up the endpoint information 
 	// use only the first bulk-in and bulk-out endpoints 
-	interface = intf->cur_altsetting;
-	for (i = 0; i < interface->desc.bNumEndpoints; ++i) 
+	for (i = 0; (i < interface->desc.bNumEndpoints) && (retval >= 0); ++i) 
 	{
 		endpoint = &interface->endpoint[i].desc;
 
-		if (!skeldev->bulk_in_endpointAddr &&
+		if (!dev->bulk_in_endpointAddr &&
 		    (endpoint->bEndpointAddress & USB_DIR_IN) &&
 		    ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
 					== USB_ENDPOINT_XFER_BULK)) 
 		{
 			// we found a bulk in endpoint 
 			buffer_size = endpoint->wMaxPacketSize;
-			skeldev->bulk_in_size = buffer_size;
-			skeldev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
-			skeldev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
-			if (!skeldev->bulk_in_buffer) 
+			dev->bulk_in_size = buffer_size;
+			dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
+			dev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
+			if (skeldev->bulk_in_buffer == NULL) 
 			{
 				printk(KERN_WARNING"Could not allocate bulk_in_buffer");
-				return -1;
+				retval = -ENOMEM;
 			}
 		}
 
-		if (!skeldev->bulk_out_endpointAddr &&
+		if (!dev->bulk_out_endpointAddr &&
 		    !(endpoint->bEndpointAddress & USB_DIR_IN) &&
 		    ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
 					== USB_ENDPOINT_XFER_BULK)) 
 		{
 			// we found a bulk out endpoint 
-			skeldev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
+			dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
 		}
 	}
-	if (!(skeldev->bulk_in_endpointAddr && skeldev->bulk_out_endpointAddr)) 
+
+	if (retval >= 0)
 	{
-		printk(KERN_WARNING"Could not find both bulk-in and bulk-out endpoints");
-		return -1;
+		if (!(dev->bulk_in_endpointAddr && skeldev->bulk_out_endpointAddr)) 
+		{
+			printk(KERN_WARNING"Could not find both bulk-in and bulk-out endpoints");
+			retval = -1;
+		}
+
+		// save our data pointer in this interface device 
+		usb_set_intfdata(intf, skeldev);
+
+		// we can register the device now, as it is ready 
+		retval = usb_register_dev(intf, &ele784_usb_driver);
+		if (retval) 
+		{
+			// something prevented us from registering this driver 
+			printk(KERN_WARNING"Not able to get a minor for this device.");
+			usb_set_intfdata(intf, NULL);
+			retval = -1;
+		}
+
+		// let the user know what node this device is now attached to 
+		printk(KERN_WARNING"USB Skeleton device now attached to USBSkel-%d", intf->minor);
+		retval = 0;
+	}
+	
+	if (retval < 0)
+	{
+		if (dev)
+		{
+			kref_put(&dev->kref, skel_delete);
+		}
 	}
 
-	// save our data pointer in this interface device 
-	usb_set_intfdata(intf, skeldev);
-
-	// we can register the device now, as it is ready 
-	retval = usb_register_dev(intf, &ele784_usb_driver);
-	if (retval) 
-	{
-		// something prevented us from registering this driver 
-		printk(KERN_WARNING"Not able to get a minor for this device.");
-		usb_set_intfdata(intf, NULL);
-		return -1;
-	}
-
-	// let the user know what node this device is now attached to 
-	printk(KERN_WARNING"USB Skeleton device now attached to USBSkel-%d", intf->minor);
-	return 0;
-	/*
-	error:
-	if (dev)
-		kref_put(&dev->kref, skel_delete);
-	return 0;*/
+	return retval;
 }
 
-static void lab2_disconnect(struct usb_interface *interface)
+static void ele784_disconnect(struct usb_interface *interface)
 {
-    /* called when unplugging a USB device. */
+	// called when unplugging a USB device.
+	printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => USB DISCONNECTED\n", __FUNCTION__, __LINE__);
 }
 
 //===================================================
@@ -367,61 +367,18 @@ static void lab2_disconnect(struct usb_interface *interface)
 //===================================================
 static int __init ele784_init(void)
 {
-	int result;
-	int usb_result;
+	int usb_result = 0;
 
 	printk(KERN_ALERT"Laboratoire2_init (%s:%u) => Let's hope this will not crash! MOM'S SPAGHETTI!!!\n", __FUNCTION__, __LINE__);
-
-	// Allocate a version number
-	result = alloc_chrdev_region(&CamDev.dev, 0, 1, "Laboratoire2");
-
-   if (result < 0)
-   {
-		printk(KERN_WARNING"Laboratoire2_init ERROR IN alloc_chrdev_region (%s:%s:%u)\n", __FILE__, __FUNCTION__, __LINE__);
-   }
-   else
-   {
-		printk(KERN_WARNING"Laboratoire2_init : MAJOR = %u MINOR = %u\n", MAJOR(CamDev.dev), MINOR(CamDev.dev));
-   }
-    
-	// Initialize class that will be used by device_create()
-	CamDev.class = class_create(THIS_MODULE, "Labo2Class");
-
-	// Create a device and register it with sysfs
-	device_create(CamDev.class, NULL, CamDev.dev, &CamDev, "etsele_cdev");
-	//device_create(CamDev.class, NULL, CamDev.dev, &CamDev, "Laboratoire2");
-
-	// Initialize char device structure
-	cdev_init(&CamDev.cdev, &ele784_fops);
-
-	// Set owner to this current module
-	CamDev.cdev.owner = THIS_MODULE;
-
-	// INIT EVERYTHING HERE!-----------------------------------------------
-
 
 	// register this driver with the USB subsystem 
 	usb_result = usb_register(&ele784_usb_driver);
 	if (usb_result < 0) 
 	{
 		printk(KERN_WARNING"usb_register failed for the %s driver." "Error number %d",__FILE__,usb_result);
-				 
-		return usb_result;
-	}
-	else
-	{
-		printk(KERN_WARNING"usb_register succeed for the %s driver. Code number %d",__FILE__,usb_result);
 	}
 
-
-	// Add the char device to the system, initialize everything before here!
-	if (cdev_add(&CamDev.cdev, CamDev.dev, 1) < 0)
-	{
-		  printk(KERN_WARNING"Laboratoire2 ERROR IN cdev_add (%s:%s:%u)\n", __FILE__, __FUNCTION__, __LINE__);
-	}
-
-	// Return 0 for success
-	return 0;
+	return usb_result;
 }
 
 
@@ -433,31 +390,10 @@ static int __init ele784_init(void)
 //===================================================
 static void __exit ele784_exit (void) 
 {
-	//Remove char device from system
-	cdev_del(&CamDev.cdev);
-
-	//Unregister a range of devicestarting from number BDev.dev
-	unregister_chrdev_region(CamDev.dev, 1);
-
-	//Remove a device created before with device_create()
-	device_destroy (CamDev.class, CamDev.dev);
-
-	//Destroy the class created before with class_create()
-	class_destroy(CamDev.class);
-
-	//UNINIT EVERYTHING HERE!
 	usb_deregister(&ele784_usb_driver);
 
 	printk(KERN_ALERT"Laboratoire2_exit (%s:%u) => Goodbye, cruel world!!!\n", __FUNCTION__, __LINE__);
 }
 
+module_usb_driver(ele784_usb_driver);
 
-//Module initiation function
-module_init(ele784_init);
-
-//Module exiting (disinstalling) function
-module_exit(ele784_exit);
-
-// https://www.kernel.org/doc/htmldocs/writing_usb_driver/basics.html
-// http://matthias.vallentin.net/blog/2007/04/writing-a-linux-kernel-driver-for-an-unknown-usb-device/
-// http://www.makelinux.net/ldd3/chp-13-sect-4
