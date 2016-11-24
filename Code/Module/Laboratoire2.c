@@ -371,7 +371,7 @@ static int __init ele784_init(void)
 
     printk(KERN_ALERT"Laboratoire2_init (%s:%u) => Let's hope this will not crash! MOM'S SPAGHETTI!!!\n", __FUNCTION__, __LINE__);
 
-    // Allocate a version number *** MAYBE CHANGE THAT TO GET MAJOR = 250
+    // Allocate a version number
     result = alloc_chrdev_region(&CamDev.dev, 0, 1, "Laboratoire2");
 
     if (result < 0)
@@ -387,7 +387,8 @@ static int __init ele784_init(void)
     CamDev.class = class_create(THIS_MODULE, "Labo2Class");
 
     // Create a device and register it with sysfs
-    device_create(CamDev.class, NULL, CamDev.dev, &CamDev, "Laboratoire2");
+	 device_create(CamDev.class, NULL, CamDev.dev, &CamDev, "etsele_cdev");
+    //device_create(CamDev.class, NULL, CamDev.dev, &CamDev, "Laboratoire2");
 
     // Initialize char device structure
     cdev_init(&CamDev.cdev, &ele784_fops);
