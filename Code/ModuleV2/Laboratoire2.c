@@ -80,7 +80,7 @@ static struct file_operations ele784_fops =
 	.unlocked_ioctl 	= ele784_ioctl,
 };
 
-static struct usb_class_driver skel_class = {
+static struct usb_class_driver ele784_class = {
 	.name = "etsele_cdev%d",
 	.fops = &ele784_fops,
 	.minor_base = USB_CAM_MINOR_BASE,
@@ -97,9 +97,17 @@ struct usb_ele784
 	__u8							bulk_out_endpointAddr;	   // the address of the bulk out endpoint 
 	struct kref					kref;
 };
-#define to_skel_dev(d) container_of(d, struct usb_skel, kref)
+#define to_skel_dev(d) container_of(d, struct usb_ele784, kref)
 
 
+static void ele784_delete(struct kref *kref)
+{	
+	struct usb_ele784 *dev = to_ele784_dev(kref);
+
+	usb_put_dev(dev->udev);
+	kfree (dev->bulk_in_buffer);
+	kfree (dev);
+}
 
 //===================================================
 //
@@ -268,12 +276,13 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 
 	// allocate memory for our device state and initialize it 
 	dev = kzalloc(sizeof(struct usb_ele784), GFP_KERNEL);
-	if (skeldev == NULL)
+	if (dev == NULL)
 	{
 		printk(KERN_WARNING"Out of memory (%s:%s)\n",__FUNCTION__, __LINE__);
 		retval = -ENOMEM;
 	}
-	if (retval >= 0)
+
+	if (retval == 0)
 	{
 		kref_init(&dev->kref);
 		dev->dev = usb_get_dev(interface_to_usbdev(intf));
@@ -283,7 +292,7 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 
 	// set up the endpoint information 
 	// use only the first bulk-in and bulk-out endpoints 
-	for (i = 0; (i < interface->desc.bNumEndpoints) && (retval >= 0); ++i) 
+	for (i = 0; (i < interface->desc.bNumEndpoints) && (retval == 0); ++i) 
 	{
 		endpoint = &interface->endpoint[i].desc;
 
@@ -304,7 +313,8 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 			}
 		}
 
-		if (!dev->bulk_out_endpointAddr &&
+		if ((retval == 0) &&
+			 !dev->bulk_out_endpointAddr &&
 		    !(endpoint->bEndpointAddress & USB_DIR_IN) &&
 		    ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
 					== USB_ENDPOINT_XFER_BULK)) 
@@ -314,16 +324,16 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 		}
 	}
 
-	if (retval >= 0)
+	if (retval == 0)
 	{
-		if (!(dev->bulk_in_endpointAddr && skeldev->bulk_out_endpointAddr)) 
+		if (!(dev->bulk_in_endpointAddr && dev->bulk_out_endpointAddr)) 
 		{
 			printk(KERN_WARNING"Could not find both bulk-in and bulk-out endpoints");
 			retval = -1;
 		}
 
 		// save our data pointer in this interface device 
-		usb_set_intfdata(intf, skeldev);
+		usb_set_intfdata(intf, dev);
 
 		// we can register the device now, as it is ready 
 		retval = usb_register_dev(intf, &ele784_usb_driver);
@@ -334,17 +344,18 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 			usb_set_intfdata(intf, NULL);
 			retval = -1;
 		}
-
-		// let the user know what node this device is now attached to 
-		printk(KERN_WARNING"USB Skeleton device now attached to USBSkel-%d", intf->minor);
-		retval = 0;
+		else
+		{
+			// let the user know what node this device is now attached to 
+			printk(KERN_ALERT"Laboratoire2_probe (%s:%u) => USB CONNECTED to USB_ELE784-%d\n", __FUNCTION__, __LINE__, intf->minor);
+		}
 	}
 	
-	if (retval < 0)
+	if (retval != 0)
 	{
 		if (dev)
 		{
-			kref_put(&dev->kref, skel_delete);
+			kref_put(&dev->kref, ele784_delete);
 		}
 	}
 
@@ -354,6 +365,24 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 static void ele784_disconnect(struct usb_interface *interface)
 {
 	// called when unplugging a USB device.
+
+	struct usb_ele784 *dev;
+	int minor = interface->minor;
+
+	/* prevent ele784_open() from racing ele784_disconnect() */
+	lock_kernel();
+
+	dev = usb_get_intfdata(interface);
+	usb_set_intfdata(interface, NULL);
+
+	/* give back our minor */
+	usb_deregister_dev(interface, &ele784_class);
+
+	unlock_kernel();
+
+	/* decrement our usage count */
+	kref_put(&dev->kref, skel_delete);
+
 	printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => USB DISCONNECTED\n", __FUNCTION__, __LINE__);
 }
 
