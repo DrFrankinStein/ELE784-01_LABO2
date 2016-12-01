@@ -25,6 +25,7 @@ __attribute__((section("__versions"))) = {
 	{ 0xedc1a25a, __VMLINUX_SYMBOL_STR(kmem_cache_alloc_trace) },
 	{ 0x10380b27, __VMLINUX_SYMBOL_STR(kmalloc_caches) },
 	{ 0xdf497eac, __VMLINUX_SYMBOL_STR(usb_find_interface) },
+	{ 0x473fe3a3, __VMLINUX_SYMBOL_STR(usb_control_msg) },
 	{ 0x4c4fef19, __VMLINUX_SYMBOL_STR(kernel_stack) },
 	{ 0x27e1a049, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0x37a0cba, __VMLINUX_SYMBOL_STR(kfree) },

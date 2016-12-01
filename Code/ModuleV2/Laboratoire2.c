@@ -202,81 +202,122 @@ static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count, 
 //===================================================
 static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg)
 {
-    int err = 0;
-    int retval = 0;
+	struct usb_interface *intf = filp->private_data;
+	struct usb_device *dev = interface_to_usbdev(intf);
 
-    // Checking if IOC command has magic number type
-    if (_IOC_TYPE(cmd) != LAB2_IOC_MAGIC)
-    {
-        return -ENOTTY;
-    }
+	int err = 0;
+	int retval = 0;
 
-    // Checking if IOC command number is valid
-    if (_IOC_NR(cmd) > LAB2_IOC_MAX)
-    {
-        return -ENOTTY;
-    }
-    
-    // Check if user have access to write or read mode 
-    if (_IOC_DIR(cmd) & _IOC_READ)
-    {
-        err = !access_ok(VERIFY_WRITE, (void __user *) arg, _IOC_SIZE(cmd));
-    }
-    else if (_IOC_DIR(cmd) & _IOC_WRITE)
-    {
-        err = !access_ok(VERIFY_READ, (void __user *) arg, _IOC_SIZE(cmd));
-    }
-    
-    // User doesn't have access in read and or write mode... Send error
-    if (err)
-    {
-        return -EFAULT;
-    }
+	// Checking if IOC command has magic number type
+	if (_IOC_TYPE(cmd) != LAB2_IOC_MAGIC)
+	{
+		return -ENOTTY;
+	}
 
-    switch (cmd)
-    {
-        // Get register value from the camera
-        case LAB2_IOCTL_GET:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
-            break;
+	// Checking if IOC command number is valid
+	if (_IOC_NR(cmd) > LAB2_IOC_MAX)
+	{
+		return -ENOTTY;
+	}
 
-        // Set register value to the camera
-        case LAB2_IOCTL_SET:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x20);
-            break;
-            
-        // Start picture acquisition
-        case LAB2_IOCTL_STREAMON:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x30);
-            break;
-            
-        // Stop picture acquisition
-        case LAB2_IOCTL_STREAMOFF:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x40);
-            break;
+	// Check if user have access to write or read mode 
+	if (_IOC_DIR(cmd) & _IOC_READ)
+	{
+		err = !access_ok(VERIFY_WRITE, (void __user *) arg, _IOC_SIZE(cmd));
+	}
+	else if (_IOC_DIR(cmd) & _IOC_WRITE)
+	{
+		err = !access_ok(VERIFY_READ, (void __user *) arg, _IOC_SIZE(cmd));
+	}
 
-        // Go grab data from the camera
-        case LAB2_IOCTL_GRAB:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x50);
-            break;
+	// User doesn't have access in read and or write mode... Send error
+	if (err)
+	{
+		return -EFAULT;
+	}
 
-        // Set the position of the camera
-        case LAB2_IOCTL_PANTILT:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x60);
-            break;
+	switch (cmd)
+	{
+		// Get register value from the camera
+		case LAB2_IOCTL_GET:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
+			break;
 
-        // Reset the position of the camera
-        case LAB2_IOCTL_PANTILT_RESET:
-            printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
-            break;
-        
-        // Data is not a know command : send an error
-        default :
-            return -ENOTTY;
-            break;
-    }
+		// Set register value to the camera
+		case LAB2_IOCTL_SET:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x20);
+			break;
+		
+		// Start picture acquisition
+		case LAB2_IOCTL_STREAMON:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x30);
 
-    return retval;
+			retval = usb_control_msg (
+				dev, 
+				usb_sndctrlpipe(dev, 0x00),
+				0x0B,
+ 				USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
+			 	0x0004,
+			 	0x0001,
+			 	NULL,
+			 	0,
+			 	0);
+			
+			break;
+		
+		// Stop picture acquisition
+		case LAB2_IOCTL_STREAMOFF:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x40);
+
+			retval = usb_control_msg (
+				dev, 
+				usb_sndctrlpipe(dev, 0x00),
+				0x0B,
+ 				USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
+			 	0x0000,
+			 	0x0001,
+			 	NULL,
+			 	0,
+			 	0);
+
+			break;
+
+		// Go grab data from the camera
+		case LAB2_IOCTL_GRAB:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x50);
+			break;
+
+		// Set the position of the camera
+		case LAB2_IOCTL_PANTILT:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x60);
+			break;
+
+		// Reset the position of the camera
+		case LAB2_IOCTL_PANTILT_RESET:
+			printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
+
+			int data[4] = {3};
+
+			retval = usb_control_msg (
+				dev, 
+				usb_sndctrlpipe(dev, 0x00),
+				0x01,
+ 				USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+			 	0x0200,
+			 	0x0900,
+			 	data,
+			 	1,
+			 	0);
+
+			break;
+
+		// Data is not a know command : send an error
+		default :
+			return -ENOTTY;
+			break;
+	}
+
+	return retval;
 }
 
 
