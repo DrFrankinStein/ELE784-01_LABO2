@@ -350,7 +350,7 @@ void IoctlMenu(void)
 					}
 					else
 					{
-						if((eval = ioctl(fd, LAB2_IOCTL_PANTILT_RESET)))
+						if((eval = ioctl(fd, LAB2_IOCTL_PANTILT_RESET)) < 0)
 						{
 							printf("\n\nERROR calling ioctl LAB2_IOCTL_PANTILT_RESET...(%s)\n", strerror(eval));
 							PressAnyKeyToContinue();
