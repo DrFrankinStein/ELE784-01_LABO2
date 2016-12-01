@@ -664,13 +664,6 @@ deps_/home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/Laboratoire2.
     $(wildcard include/config/intel/iommu.h) \
     $(wildcard include/config/amd/iommu.h) \
   include/linux/pm_wakeup.h \
-  arch/x86/include/asm/uaccess.h \
-    $(wildcard include/config/x86/intel/usercopy.h) \
-    $(wildcard include/config/debug/strict/user/copy/checks.h) \
-  arch/x86/include/asm/smap.h \
-    $(wildcard include/config/x86/smap.h) \
-  arch/x86/include/asm/uaccess_64.h \
-  /home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/../Include/Laboratoire2.h \
   include/linux/usb.h \
     $(wildcard include/config/usb/mon.h) \
   include/linux/mod_devicetable.h \
@@ -723,6 +716,12 @@ deps_/home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/Laboratoire2.
   arch/x86/include/asm/sections.h \
     $(wildcard include/config/debug/rodata.h) \
   include/asm-generic/sections.h \
+  arch/x86/include/asm/uaccess.h \
+    $(wildcard include/config/x86/intel/usercopy.h) \
+    $(wildcard include/config/debug/strict/user/copy/checks.h) \
+  arch/x86/include/asm/smap.h \
+    $(wildcard include/config/x86/smap.h) \
+  arch/x86/include/asm/uaccess_64.h \
   include/linux/hrtimer.h \
     $(wildcard include/config/high/res/timers.h) \
     $(wildcard include/config/timerfd.h) \
@@ -821,6 +820,8 @@ deps_/home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/Laboratoire2.
   include/linux/selinux.h \
     $(wildcard include/config/security/selinux.h) \
   include/linux/pm_runtime.h \
+  /home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/../Include/Laboratoire2.h \
+  /home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/../Include/usbvideo.h \
 
 /home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/Laboratoire2.o: $(deps_/home/ens/AK77510/Bureau/ELE784/ELE784-01_LABO2/Code/ModuleV2/Laboratoire2.o)
 
