@@ -285,13 +285,49 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       // Set the position of the camera
       case LAB2_IOCTL_PANTILT:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x60);
+         CAM_MVT dir_id;
+
+         //Get data from user
+         retval = __get_user(dir_id, (CAM_MVT __user *)arg);
+
+         if (!retval)
+         {
+            //Define direction
+            switch(dir_id)
+            {
+            case CAM_UP :
+               memcpy((void*) data, (const void*) CAMERA_UP, 4*sizeof(unsigned char));
+               break;
+            case CAM_DOWN :
+               memcpy((void*) data, (const void*) CAMERA_DOWN, 4*sizeof(unsigned char));
+               break;
+            case CAM_LEFT :
+               memcpy((void*) data, (const void*) CAMERA_LEFT, 4*sizeof(unsigned char));
+               break;
+            case CAM_RIGHT :
+               memcpy((void*) data, (const void*) CAMERA_RIGHT, 4*sizeof(unsigned char));
+               break;
+            }
+
+            retval = usb_control_msg (
+               dev, 
+               usb_sndctrlpipe(dev, 0x00),
+               0x01,
+               USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+               0x0100,
+               0x0900,
+               data,
+               4,
+               0);
+         }
+
          break;
 
       // Reset the position of the camera
       case LAB2_IOCTL_PANTILT_RESET:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
 
-         memcpy((void*)data, (const void*)CAMERA_RESET, 4*sizeof(unsigned char));
+         memcpy((void*)data, (const void*)CAMERA_RESET, sizeof(unsigned char));
 
          retval = usb_control_msg (
             dev, 
