@@ -235,12 +235,54 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
    {
       // Get register value from the camera
       case LAB2_IOCTL_GET:
+         
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
+         int dataToSend = 0;
+			int request;
+            //Define direction
+            switch(request)
+            {
+            case GET_CUR :
+               dataToSend = 0x81;
+               break;
+            case GET_MIN :
+               dataToSend = 0x82;
+               break;
+            case GET_MAX :
+               dataToSend = 0x83;
+               break;
+            case GET_MAX :
+               dataToSend = 0x84;
+               break;
+            }
+
+         retval = usb_control_msg (
+            dev, 
+            usb_sndctrlpipe(dev, 0x00),
+            dataToSend,
+            USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+            0x0004,
+            0x0200,
+            NULL,
+            2,
+            0);
+
          break;
 
       // Set register value to the camera
       case LAB2_IOCTL_SET:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x20);
+         char dataToSend[2];
+         retval = usb_control_msg (
+            dev, 
+            usb_sndctrlpipe(dev, 0x00),
+            0x01,	//SET_CUR
+            USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+            0x06 << 8,
+            0x0200,
+            dataToSend,
+            2,
+            0);
          break;
       
       // Start picture acquisition
@@ -252,7 +294,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             usb_sndctrlpipe(dev, 0x00),
             0x0B,
             USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
-            0x0004,
+            0x06 << 8,
             0x0001,
             NULL,
             0,
@@ -302,9 +344,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
                memcpy((void*) data, (const void*) CAMERA_DOWN, 4*sizeof(unsigned char));
                break;
             case CAM_LEFT :
-               memcpy((void*) data, (const void*) CAMERA_LEFT, 4*sizeof(unsigned char));
-               break;
-            case CAM_RIGHT :
+               memcpy((void*) data, (const void*) CAMERA_LEFT, 4*sizeof(unsase CAM_RIGHT :
                memcpy((void*) data, (const void*) CAMERA_RIGHT, 4*sizeof(unsigned char));
                break;
             }
@@ -325,7 +365,9 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 
       // Reset the position of the camera
       case LAB2_IOCTL_PANTILT_RESET:
-         printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
+         printk(igned char));
+               break;
+            cKERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
 
          memcpy((void*)data, (const void*)CAMERA_RESET, sizeof(unsigned char));
 
