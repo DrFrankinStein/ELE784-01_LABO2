@@ -51,7 +51,7 @@ enum OptionsIoctlMenuList { IoctlGet = '1',
                             IoctlPanTilt_LEFT = 'a',
                             IoctlPanTilt_RIGHT = 'd',
                             IoctlPanTiltReset = 'x',
-							IoctlClearDisplay = 'c'};
+                            IoctlClearDisplay = 'c'};
 int isMainSemUsed = 0;
 sem_t MainSem;
 
