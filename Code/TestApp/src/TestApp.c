@@ -281,9 +281,9 @@ void IoctlMenu(void)
                   }
                   else
                   {
-                     printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_STREAMON...\n");
-                     PressAnyKeyToContinue();
-                     displayRefresh = 1;
+                     //printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_STREAMON...\n");
+                     //PressAnyKeyToContinue();
+                     //displayRefresh = 1;
                   }
                   close(fd);
                }
@@ -309,9 +309,9 @@ void IoctlMenu(void)
                   }
                   else
                   {
-                     printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_STREAMOFF...\n");
-                     PressAnyKeyToContinue();
-                     displayRefresh = 1;
+                     //printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_STREAMOFF...\n");
+                     //PressAnyKeyToContinue();
+                     //displayRefresh = 1;
                   }
                   close(fd);
                }
