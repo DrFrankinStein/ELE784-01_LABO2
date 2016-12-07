@@ -101,14 +101,13 @@ static struct usb_class_driver ele784_class = {
 // Structure to hold all of our device specific stuff 
 struct usb_ele784
 {
-   struct usb_device       *dev;                        // the usb device for this device
-   struct usb_interface    *interface;                  // the interface for this device 
-   struct urb                *myUrb[5];
-
-   struct completion       myCompletion[5];
+	struct usb_device       *dev;             // the usb device for this device
+   struct usb_interface    *interface;       // the interface for this device 
+   struct urb              *myUrb[5];			// URB request blocks
+   struct completion       myCompletion[5];	// Completion interfaces used when grabbing photos
 };
 
-struct urbStruct
+struct UrbStruct
 {
 
    unsigned int myStatus;
@@ -130,11 +129,11 @@ static void complete_callback(struct urb *urb)
 {
    int ret;
    int i;   
-   unsigned char * data;
+   unsigned char *data;
    unsigned int len;
    unsigned int maxlen;
    unsigned int nbytes;
-   void * mem;
+   void *mem;
    struct completion *myComp = (struct completion*)urb->context;
 
    if(urb->status == 0)
