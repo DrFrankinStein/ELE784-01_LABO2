@@ -14,7 +14,7 @@
 // DESCRIPTION : Header code : IOCTL command list
 //               for Laboratoire2.c
 //
-// LAST MODIFICATION : Friday, December 2nd 2016
+// LAST MODIFICATION : Wednesday, December 7th 2016
 //
 //===================================================
 
@@ -22,6 +22,8 @@
 #define _LABORATOIRE2_H_
 
 #include <linux/ioctl.h>
+
+typedef enum CAM_MVT {CAM_UP, CAM_DOWN, CAM_LEFT, CAM_RIGHT} CAM_MVT;
 
 #define LAB2_IOC_MAGIC 'L'
 
@@ -41,7 +43,7 @@
 #define LAB2_IOCTL_GRAB            _IOR(LAB2_IOC_MAGIC, 0x50, int)
 
 // Set the position of the camera
-#define LAB2_IOCTL_PANTILT         _IOW(LAB2_IOC_MAGIC, 0x60, int)
+#define LAB2_IOCTL_PANTILT         _IOW(LAB2_IOC_MAGIC, 0x60, CAM_MVT)
 
 // Reset the position of the camera
 #define LAB2_IOCTL_PANTILT_RESET   _IO(LAB2_IOC_MAGIC, 0x70)

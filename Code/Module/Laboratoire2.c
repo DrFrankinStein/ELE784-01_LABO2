@@ -14,7 +14,7 @@
 // DESCRIPTION : Main code for a linux 
 //               camera usb driver
 //
-// LAST MODIFICATION : Friday, December 2nd 2016
+// LAST MODIFICATION : Wednesday, December 7th 2016
 //
 //===================================================
 
@@ -48,6 +48,12 @@
 #include "../Include/usbvideo.h"
 
 MODULE_LICENSE("Dual BSD/GPL");
+
+static const unsigned char CAMERA_UP[4]    = {0x00, 0x00, 0x80, 0xFF};
+static const unsigned char CAMERA_DOWN[4]  = {0x00, 0x00, 0x80, 0x00};
+static const unsigned char CAMERA_LEFT[4]  = {0x80, 0x00, 0x00, 0x00};
+static const unsigned char CAMERA_RIGHT[4] = {0x80, 0xFF, 0x00, 0x00};
+static const unsigned char CAMERA_RESET[4] = {0x03, 0x00, 0x00, 0x00}; 
 
 static int ele784_open (struct inode *inode, struct file *filp);
 static int ele784_release (struct inode *inode, struct file *filp);
@@ -175,6 +181,7 @@ static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count, 
 }
 
 
+
 //===================================================
 //
 // Send an I/O control command to the driver
@@ -191,6 +198,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 {
    struct usb_interface *intf = filp->private_data;
    struct usb_device *dev = interface_to_usbdev(intf);
+   unsigned char data[4];
 
    int err = 0;
    int retval = 0;
@@ -243,12 +251,12 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             dev, 
             usb_sndctrlpipe(dev, 0x00),
             0x0B,
-             USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
-             0x0004,
-             0x0001,
-             NULL,
-             0,
-             0);
+            USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
+            0x0004,
+            0x0001,
+            NULL,
+            0,
+            0);
          
          break;
       
@@ -260,12 +268,12 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             dev, 
             usb_sndctrlpipe(dev, 0x00),
             0x0B,
-             USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
-             0x0000,
-             0x0001,
-             NULL,
-             0,
-             0);
+            USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE,
+            0x0000,
+            0x0001,
+            NULL,
+            0,
+            0);
 
          break;
 
@@ -283,18 +291,18 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       case LAB2_IOCTL_PANTILT_RESET:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x70);
 
-         int data[4] = {3};
+         memcpy((void*)data, (const void*)CAMERA_RESET, 4*sizeof(unsigned char));
 
          retval = usb_control_msg (
             dev, 
             usb_sndctrlpipe(dev, 0x00),
             0x01,
-             USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
-             0x0200,
-             0x0900,
-             data,
-             1,
-             0);
+            USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+            0x0200,
+            0x0900,
+            data,
+            1,
+            0);
 
          break;
 
@@ -398,6 +406,8 @@ static void ele784_disconnect(struct usb_interface *interface)
 
    printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => USB DISCONNECTED\n", __FUNCTION__, __LINE__);
 }
+
+
 
 module_usb_driver(ele784_usb_driver);
 
