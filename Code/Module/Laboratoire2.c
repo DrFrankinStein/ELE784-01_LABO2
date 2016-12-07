@@ -269,7 +269,34 @@ static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count, 
 {
    printk(KERN_WARNING"Calling : %s\n",__FUNCTION__);  
 
+	struct usb_interface *intf = filp->private_data;
+   struct usb_device *dev = interface_to_usbdev(intf);
+   struct usb_ele784 *structPerso = usb_get_intfdata(intf);
+
+	struct usb_host_interface *cur_altsetting = intf->cur_altsetting;
+   struct usb_endpoint_descriptor endpointDesc = cur_altsetting->endpoint[0].desc;
+
+	int nbPackets = 40;  // The number of isochronous packets this urb should contain         
+	int myPacketSize = le16_to_cpu(endpointDesc.wMaxPacketSize);         
+	int size = myPacketSize * nbPackets;
+	int nbUrbs = 5;
+	int i;
+
    ssize_t retval = 0;
+
+	for (i = 0; i < nbUrbs; i++)
+	{
+		wait_for_completion(&structPerso->myCompletion[i]);
+	}
+
+	retval = copy_to_user(ubuf, urbInfo.myData, count);
+
+	for (i = 0; i < nbUrbs; i++)
+	{
+		usb_kill_urb(structPerso->myUrb[i]);
+		usb_free_coherent(dev, size, structPerso->myUrb[i]->transfer_buffer, structPerso->myUrb[i]->transfer_dma);
+		usb_free_urb(structPerso->myUrb[i]);
+	}
 
    //return the number of data transfer
    return retval;
