@@ -40,6 +40,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/usb.h>
+#include <linux/completion.h>
 
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
@@ -102,98 +103,100 @@ struct usb_ele784
 {
    struct usb_device       *dev;                        // the usb device for this device
    struct usb_interface    *interface;                  // the interface for this device 
+   struct urb                *myUrb[5];
+
+   struct completion       myCompletion[5];
 };
 
 struct urbStruct
 {
 
-	unsigned int myStatus;
+   unsigned int myStatus;
 
-	unsigned int myLength;
+   unsigned int myLength;
 
-	unsigned int myLengthUsed;
+   unsigned int myLengthUsed;
 
-	char *myData;
+   char *myData;
 } urbInfo = {
-					.myStatus = 0,
+               .myStatus = 0,
 
-					.myLength = 42666,
+               .myLength = 42666,
 
-					.myLengthUsed = 0,
-				};
+               .myLengthUsed = 0,
+            };
 
-static void complete_callback(struct urb *urb){
+static void complete_callback(struct urb *urb)
+{
+   int ret;
+   int i;   
+   unsigned char * data;
+   unsigned int len;
+   unsigned int maxlen;
+   unsigned int nbytes;
+   void * mem;
+   struct completion *myComp = (struct completion*)urb->context;
 
-	int ret;
-	int i;	
-	unsigned char * data;
-	unsigned int len;
-	unsigned int maxlen;
-	unsigned int nbytes;
-	void * mem;
-
-	if(urb->status == 0)
-	{
-		
-		for (i = 0; i < urb->number_of_packets; ++i) 
-		{
-			if(urbInfo.myStatus == 1)
-			{
-				continue;
-			}
-			if (urb->iso_frame_desc[i].status < 0) 
-			{
-				continue;
-			}
-			
-			data = urb->transfer_buffer + urb->iso_frame_desc[i].offset;
-			if(data[1] & (1 << 6))
-			{
-				continue;
-			}
-			len = urb->iso_frame_desc[i].actual_length;
-			if (len < 2 || data[0] < 2 || data[0] > len)
-			{
-				continue;
-			}
-		
-			len -= data[0];
-			maxlen = urbInfo.myLength - urbInfo.myLengthUsed ;
-			mem = urbInfo.myData + urbInfo.myLengthUsed;
-			nbytes = min(len, maxlen);
-			memcpy(mem, data + data[0], nbytes);
-			urbInfo.myLengthUsed += nbytes;
-	
-			if (len > maxlen) 
-			{
-				urbInfo.myStatus = 1; // DONE
-			}
-	
-			/* Mark the buffer as done if the EOF marker is set. */
-			if ((data[1] & (1 << 1)) && (urbInfo.myLengthUsed != 0)) 
-			{
-				urbInfo.myStatus = 1; // DONE
-			}
-		}
-	
-		if (!(urbInfo.myStatus == 1))
-		{
-			if ((ret = usb_submit_urb(urb, GFP_ATOMIC)) < 0) 
-			{
-				//printk(KERN_WARNING "");
-			}
-		}
-		else
-		{
-			///////////////////////////////////////////////////////////////////////
-			//  Synchronisation
-			///////////////////////////////////////////////////////////////////////
-		}			
-	}
-	else
-	{
-		//printk(KERN_WARNING "");
-	}
+   if(urb->status == 0)
+   {
+      
+      for (i = 0; i < urb->number_of_packets; ++i) 
+      {
+         if(urbInfo.myStatus == 1)
+         {
+            continue;
+         }
+         if (urb->iso_frame_desc[i].status < 0) 
+         {
+            continue;
+         }
+         
+         data = urb->transfer_buffer + urb->iso_frame_desc[i].offset;
+         if(data[1] & (1 << 6))
+         {
+            continue;
+         }
+         len = urb->iso_frame_desc[i].actual_length;
+         if (len < 2 || data[0] < 2 || data[0] > len)
+         {
+            continue;
+         }
+      
+         len -= data[0];
+         maxlen = urbInfo.myLength - urbInfo.myLengthUsed ;
+         mem = urbInfo.myData + urbInfo.myLengthUsed;
+         nbytes = min(len, maxlen);
+         memcpy(mem, data + data[0], nbytes);
+         urbInfo.myLengthUsed += nbytes;
+   
+         if (len > maxlen) 
+         {
+            urbInfo.myStatus = 1; // DONE
+         }
+   
+         /* Mark the buffer as done if the EOF marker is set. */
+         if ((data[1] & (1 << 1)) && (urbInfo.myLengthUsed != 0)) 
+         {
+            urbInfo.myStatus = 1; // DONE
+         }
+      }
+   
+      if (!(urbInfo.myStatus == 1))
+      {
+         if ((ret = usb_submit_urb(urb, GFP_ATOMIC)) < 0) 
+         {
+            //printk(KERN_WARNING "");
+         }
+      }
+      else
+      {
+         complete(myComp);
+      }         
+   }
+   else
+   {
+      //printk(KERN_WARNING "");
+   }
 }
 
 
@@ -290,6 +293,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 {
    struct usb_interface *intf = filp->private_data;
    struct usb_device *dev = interface_to_usbdev(intf);
+   struct usb_ele784 *structPerso = usb_get_intfdata(intf);
    unsigned char data[4];
 
    int err = 0;
@@ -415,10 +419,9 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       case LAB2_IOCTL_GRAB:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x50);
 
-			urbInfo.myStatus = 0;
-			urbInfo.myLengthUsed = 0;
+         urbInfo.myStatus = 0;
+         urbInfo.myLengthUsed = 0;
 
-			struct urb *myUrb[5];
          struct usb_host_interface *cur_altsetting = intf->cur_altsetting;
          struct usb_endpoint_descriptor endpointDesc = cur_altsetting->endpoint[0].desc;
 
@@ -426,46 +429,46 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
          int myPacketSize = le16_to_cpu(endpointDesc.wMaxPacketSize);         
          int size = myPacketSize * nbPackets;
          int nbUrbs = 5;
-			int i, j, ret;
+         int i, j, ret;
 
          for (i = 0; i < nbUrbs; ++i) 
          {
-            usb_free_urb(myUrb[i]); // Pour être certain
-            myUrb[i] = usb_alloc_urb(size,GFP_KERNEL);
-            if (myUrb[i] == NULL) 
+            usb_free_urb(structPerso->myUrb[i]); // Pour être certain
+            structPerso->myUrb[i] = usb_alloc_urb(nbPackets,GFP_KERNEL);
+            if (structPerso->myUrb[i] == NULL) 
             {
                //printk(KERN_WARNING "");   
                return -ENOMEM;
             }
 
-            myUrb[i]->transfer_buffer = usb_alloc_coherent(dev, myPacketSize, GFP_KERNEL, &(myUrb[i]->transfer_dma));
+            structPerso->myUrb[i]->transfer_buffer = usb_alloc_coherent(dev, size, GFP_KERNEL, &(structPerso->myUrb[i]->transfer_dma));
 
-            if (myUrb[i]->transfer_buffer == NULL)
+            if (structPerso->myUrb[i]->transfer_buffer == NULL)
             {
                //printk(KERN_WARNING "");   
-               usb_free_urb(myUrb[i]);
+               usb_free_urb(structPerso->myUrb[i]);
                return -ENOMEM;
             }
 
-            myUrb[i]->dev = dev;
-            myUrb[i]->context = dev;
-            myUrb[i]->pipe = usb_rcvisocpipe(dev, endpointDesc.bEndpointAddress);
-            myUrb[i]->transfer_flags = URB_ISO_ASAP | URB_NO_TRANSFER_DMA_MAP;
-            myUrb[i]->interval = endpointDesc.bInterval;
-            myUrb[i]->complete = complete_callback;
-            myUrb[i]->number_of_packets = nbPackets;
-            myUrb[i]->transfer_buffer_length = myPacketSize;
+            structPerso->myUrb[i]->dev = dev;
+            structPerso->myUrb[i]->context = &structPerso->myCompletion[i];
+            structPerso->myUrb[i]->pipe = usb_rcvisocpipe(dev, endpointDesc.bEndpointAddress);
+            structPerso->myUrb[i]->transfer_flags = URB_ISO_ASAP | URB_NO_TRANSFER_DMA_MAP;
+            structPerso->myUrb[i]->interval = endpointDesc.bInterval;
+            structPerso->myUrb[i]->complete = complete_callback;
+            structPerso->myUrb[i]->number_of_packets = nbPackets;
+            structPerso->myUrb[i]->transfer_buffer_length = myPacketSize;
 
             for (j = 0; j < nbPackets; ++j) 
             {
-               myUrb[i]->iso_frame_desc[j].offset = j * myPacketSize;
-               myUrb[i]->iso_frame_desc[j].length = myPacketSize;
+               structPerso->myUrb[i]->iso_frame_desc[j].offset = j * myPacketSize;
+               structPerso->myUrb[i]->iso_frame_desc[j].length = myPacketSize;
             }                        
          }
 
          for(i = 0; i < nbUrbs; i++)
          {
-            if ((ret = usb_submit_urb(myUrb[i], GFP_ATOMIC)) < 0)
+            if ((ret = usb_submit_urb(structPerso->myUrb[i], GFP_ATOMIC)) < 0)
             {
                //printk(KERN_WARNING "");      
                return ret;
@@ -560,7 +563,7 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 {
    struct usb_host_interface *iface_desc;
    struct usb_ele784 *dev = NULL;
-   int retval = 0;
+   int retval = 0, i;
 
    // allocate memory for our device state and initialize it 
    dev = kzalloc(sizeof(struct usb_ele784), GFP_KERNEL);
@@ -572,7 +575,6 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 
    if (retval == 0)
    {
-      //kref_init(&dev->kref);
       dev->dev = usb_get_dev(interface_to_usbdev(intf));
       dev->interface = intf;
       iface_desc = intf->cur_altsetting;
@@ -596,7 +598,11 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
             // let the user know what node this device is now attached to 
             printk(KERN_ALERT"Laboratoire2_probe (%s:%u) => USB CONNECTED to USB_ELE784-%d\n", __FUNCTION__, __LINE__, intf->minor);
             usb_set_interface(dev->dev, 1, 4);
-				urbInfo.myData = kzalloc(urbInfo.myLength * sizeof(char), GFP_KERNEL);
+            urbInfo.myData = kzalloc(urbInfo.myLength * sizeof(char), GFP_KERNEL);
+            for (i = 0; i < 5; i++)
+            {
+               init_completion(&dev->myCompletion[i]);
+            }
          }
       }
       else if (iface_desc->desc.bInterfaceClass == CC_VIDEO &&
@@ -633,7 +639,7 @@ static void ele784_disconnect(struct usb_interface *interface)
    usb_set_intfdata(interface, NULL);
 
    kfree(dev);
-	kfree(urbInfo.myData);
+   kfree(urbInfo.myData);
 
    printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => USB DISCONNECTED\n", __FUNCTION__, __LINE__);
 }
