@@ -30,6 +30,7 @@
 #include <termios.h>
 #include <time.h>
 #include "Laboratoire2.h"
+#include "dht_data.h"
 
 // Command to clear the console
 #define CLR_SCREEN printf("\033[2J\033[1;1H\n")
@@ -39,7 +40,8 @@
 
 enum CommonList {Quit = 'q', EmptyCmd = -1};
 
-enum OptionsMainMenuList { IoctlMenuId = '1'};
+enum OptionsMainMenuList { IoctlMenuId = '1',
+                           TestPhoto = '2',};
 
 enum OptionsIoctlMenuList { IoctlGet = '1',
                             IoctlSet,
@@ -51,7 +53,7 @@ enum OptionsIoctlMenuList { IoctlGet = '1',
                             IoctlPanTilt_LEFT = 'a',
                             IoctlPanTilt_RIGHT = 'd',
                             IoctlPanTiltReset = 'x',
-                            IoctlClearDisplay = 'c'};
+                            IoctlClearDisplay = 'c',};
 int isMainSemUsed = 0;
 sem_t MainSem;
 
@@ -152,6 +154,61 @@ void PressAnyKeyToContinue(void)
    printf("\n\nPress any key to continue...\n\n");
 
    WaitForKeyPressed();
+}
+
+int TestPictureCamSaveInTMP(void)
+{
+   static int index = 0;
+   char name[100];
+   FILE *foutput;
+   unsigned char *inBuffer;
+   unsigned char *finalBuf;
+   int size;
+
+   sprintf(name,"/tmp/test%i.jpg",index++);
+
+   inBuffer = malloc((42666) * sizeof(unsigned char));
+   finalBuf = malloc((42666 * 2) * sizeof(unsigned char));
+
+   if ((inBuffer == NULL) || (finalBuf == NULL))
+   {
+      free(inBuffer);
+      free(finalBuf);
+      return -1;
+   }
+
+   foutput = fopen(name, "wb");
+   if (foutput != NULL)
+   {
+      int fd = open("/dev/etsele_cdev", O_RDWR);
+      if(fd > 0)
+      {
+         ioctl(fd, LAB2_IOCTL_STREAMON);
+         ioctl(fd, LAB2_IOCTL_GRAB);
+         size = read(fd, inBuffer, 42666);
+         ioctl(fd, LAB2_IOCTL_STREAMOFF);
+         close(fd);
+         if (size > 0)
+         {
+            memcpy(finalBuf, inBuffer, HEADERFRAME1);
+            memcpy(finalBuf + HEADERFRAME1, dht_data, DHT_SIZE);
+            memcpy(finalBuf + HEADERFRAME1 + DHT_SIZE,
+                   inBuffer + HEADERFRAME1,
+                   (size - HEADERFRAME1));
+            fwrite(finalBuf, size + DHT_SIZE, 1, foutput);
+         }
+      }
+      fclose(foutput);
+      free(inBuffer);
+      free(finalBuf);
+      return 0;
+   }
+   else
+   {
+      free(inBuffer);
+      free(finalBuf);
+      return -1;
+   }
 }
 
 void IoctlMenu(void)
@@ -337,9 +394,9 @@ void IoctlMenu(void)
                   }
                   else
                   {
-                     printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_GRAB...\n");
-                     PressAnyKeyToContinue();
-                     displayRefresh = 1;
+                     //printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_GRAB...\n");
+                     //PressAnyKeyToContinue();
+                     //displayRefresh = 1;
                   }
                   close(fd);
                }
@@ -479,6 +536,7 @@ int main (int argc, char *argv[])
       printf("\nPlease make a selection : \n");
 
       printf("\n(%c) - IOCTL", IoctlMenuId );
+      printf("\n(%c) - TestPhoto", TestPhoto );
       printf("\n\n(%c) - Quit", Quit);
       printf("\n\nMake a selection : ");
 
@@ -488,6 +546,9 @@ int main (int argc, char *argv[])
       {
       case IoctlMenuId:
          IoctlMenu();
+         break;
+      case TestPhoto:
+         TestPictureCamSaveInTMP();
          break;
       }
    }

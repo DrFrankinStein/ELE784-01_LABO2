@@ -107,26 +107,18 @@ struct usb_ele784
    struct completion       myCompletion[5];	// Completion interfaces used when grabbing photos
 };
 
-struct UrbStruct
-{
 
-   unsigned int myStatus;
+unsigned int myStatus = 0;
 
-   unsigned int myLength;
+const unsigned int myLength = 42666;
 
-   unsigned int myLengthUsed;
+unsigned int myLengthUsed = 0;
 
-   char *myData;
-} urbInfo = {
-               .myStatus = 0,
-
-               .myLength = 42666,
-
-               .myLengthUsed = 0,
-            };
+char myData[42666];
 
 static void complete_callback(struct urb *urb)
 {
+	printk(KERN_WARNING"Calling %s\n",__FUNCTION__);
    int ret;
    int i;   
    unsigned char *data;
@@ -141,7 +133,7 @@ static void complete_callback(struct urb *urb)
       
       for (i = 0; i < urb->number_of_packets; ++i) 
       {
-         if(urbInfo.myStatus == 1)
+         if(myStatus == 1)
          {
             continue;
          }
@@ -162,39 +154,40 @@ static void complete_callback(struct urb *urb)
          }
       
          len -= data[0];
-         maxlen = urbInfo.myLength - urbInfo.myLengthUsed ;
-         mem = urbInfo.myData + urbInfo.myLengthUsed;
+         maxlen = myLength - myLengthUsed ;
+         mem = myData + myLengthUsed;
          nbytes = min(len, maxlen);
          memcpy(mem, data + data[0], nbytes);
-         urbInfo.myLengthUsed += nbytes;
+         myLengthUsed += nbytes;
    
          if (len > maxlen) 
          {
-            urbInfo.myStatus = 1; // DONE
+            myStatus = 1; // DONE
          }
    
          /* Mark the buffer as done if the EOF marker is set. */
-         if ((data[1] & (1 << 1)) && (urbInfo.myLengthUsed != 0)) 
+         if ((data[1] & (1 << 1)) && (myLengthUsed != 0)) 
          {
-            urbInfo.myStatus = 1; // DONE
+            myStatus = 1; // DONE
          }
       }
    
-      if (!(urbInfo.myStatus == 1))
+      if (!(myStatus == 1))
       {
          if ((ret = usb_submit_urb(urb, GFP_ATOMIC)) < 0) 
          {
-            //printk(KERN_WARNING "");
+            //printk(KERN_WARNING"%s(%i) ERROR Submitting\n",__FUNCTION__,__LINE__);
          }
       }
       else
       {
+			//printk(KERN_WARNING"%s Completed\n",__FUNCTION__);
          complete(myComp);
       }         
    }
    else
    {
-      //printk(KERN_WARNING "");
+      //printk(KERN_WARNING"%s(%i) ERROR status != 0\n",__FUNCTION__, __LINE__);
    }
 }
 
@@ -285,10 +278,23 @@ static ssize_t ele784_read (struct file *filp, char __user *ubuf, size_t count, 
 
 	for (i = 0; i < nbUrbs; i++)
 	{
+		//printk(KERN_WARNING"%s : Wait for completion %i \n",__FUNCTION__, i);
 		wait_for_completion(&structPerso->myCompletion[i]);
+		//printk(KERN_WARNING"%s : completion %i done\n",__FUNCTION__, i);
 	}
 
-	retval = copy_to_user(ubuf, urbInfo.myData, count);
+	/*for (i = 0; i < nbUrbs; i++)
+	{
+		reinit_completion(&structPerso->myCompletion[i]);
+	}*/
+
+	if (!copy_to_user(ubuf, myData, myLength))
+	{
+		retval = myLengthUsed;
+		myLengthUsed = 0;
+	}
+
+	//printk(KERN_WARNING"%s : Copy to user return value : %i \n",__FUNCTION__, (int)retval);	
 
 	for (i = 0; i < nbUrbs; i++)
 	{
@@ -356,9 +362,24 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
    switch (cmd)
    {
       // Get register value from the camera
-      case LAB2_IOCTL_GET:
-         
+      case LAB2_IOCTL_GET:      
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
+			/*GetSetStruct get_t;
+			retval = __get_user(get_t, (GetSetStruct __user *)arg);
+
+			if(!retval)
+			{
+				retval = usb_control_msg (
+            dev, 
+            usb_rcvctrlpipe(dev, 0x00),
+            get_t.requestType,
+            USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+            get_t.processingUnitSelector << 8,
+            0x0200,
+            NULL,
+            2,
+            0);
+			}*/
          /*int dataToSend = 0;
          int request;
             //Define direction
@@ -380,7 +401,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 
          retval = usb_control_msg (
             dev, 
-            usb_sndctrlpipe(dev, 0x00),
+            usb_rcvctrlpipe(dev, 0x00),
             dataToSend,
             USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
             0x0004,
@@ -445,8 +466,8 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       case LAB2_IOCTL_GRAB:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x50);
 
-         urbInfo.myStatus = 0;
-         urbInfo.myLengthUsed = 0;
+         myStatus = 0;
+         myLengthUsed = 0;
 
          struct usb_host_interface *cur_altsetting = intf->cur_altsetting;
          struct usb_endpoint_descriptor endpointDesc = cur_altsetting->endpoint[0].desc;
@@ -457,13 +478,15 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
          int nbUrbs = 5;
          int i, j, ret;
 
+			//printk(KERN_WARNING"Calling : %s : GRAB nbPackets = %i -- myPacketSize = %i and %i -- size = %i \n",__FUNCTION__, nbPackets,endpointDesc.wMaxPacketSize,myPacketSize, size);
+
          for (i = 0; i < nbUrbs; ++i) 
          {
             usb_free_urb(structPerso->myUrb[i]); // Pour être certain
             structPerso->myUrb[i] = usb_alloc_urb(nbPackets,GFP_KERNEL);
             if (structPerso->myUrb[i] == NULL) 
             {
-               //printk(KERN_WARNING "");   
+               //printk(KERN_WARNING "%s grab (%i) Error", __FUNCTION__, __LINE__);  
                return -ENOMEM;
             }
 
@@ -471,7 +494,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 
             if (structPerso->myUrb[i]->transfer_buffer == NULL)
             {
-               //printk(KERN_WARNING "");   
+               //printk(KERN_WARNING "%s grab (%i) Error", __FUNCTION__, __LINE__);   
                usb_free_urb(structPerso->myUrb[i]);
                return -ENOMEM;
             }
@@ -483,7 +506,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             structPerso->myUrb[i]->interval = endpointDesc.bInterval;
             structPerso->myUrb[i]->complete = complete_callback;
             structPerso->myUrb[i]->number_of_packets = nbPackets;
-            structPerso->myUrb[i]->transfer_buffer_length = myPacketSize;
+            structPerso->myUrb[i]->transfer_buffer_length = size;
 
             for (j = 0; j < nbPackets; ++j) 
             {
@@ -494,9 +517,10 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
 
          for(i = 0; i < nbUrbs; i++)
          {
-            if ((ret = usb_submit_urb(structPerso->myUrb[i], GFP_ATOMIC)) < 0)
+				//printk(KERN_WARNING"%s with Grab : submitting urb #%i\n",__FUNCTION__, i);
+            if ((ret = usb_submit_urb(structPerso->myUrb[i], GFP_KERNEL)) < 0)
             {
-               //printk(KERN_WARNING "");      
+               //printk(KERN_WARNING "%s grab (%i) Error", __FUNCTION__, __LINE__);  
                return ret;
             }
          }
@@ -624,7 +648,6 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
             // let the user know what node this device is now attached to 
             printk(KERN_ALERT"Laboratoire2_probe (%s:%u) => USB CONNECTED to USB_ELE784-%d\n", __FUNCTION__, __LINE__, intf->minor);
             usb_set_interface(dev->dev, 1, 4);
-            urbInfo.myData = kzalloc(urbInfo.myLength * sizeof(char), GFP_KERNEL);
             for (i = 0; i < 5; i++)
             {
                init_completion(&dev->myCompletion[i]);
@@ -656,16 +679,21 @@ static int ele784_probe(struct usb_interface *intf, const struct usb_device_id *
 //===================================================
 static void ele784_disconnect(struct usb_interface *interface)
 {
+	//printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => Called!\n", __FUNCTION__, __LINE__);
    struct usb_ele784 *dev;
    
    /* give back our minor */
+	//printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => usb_deregister_dev(interface, &ele784_class);\n", __FUNCTION__, __LINE__);
    usb_deregister_dev(interface, &ele784_class);
 
+	//printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => usb_get_intfdata(interface)\n", __FUNCTION__, __LINE__);
    dev = usb_get_intfdata(interface);
+
+	//printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => deleting interface\n", __FUNCTION__, __LINE__);
    usb_set_intfdata(interface, NULL);
 
+	//printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => Freeing dev\n", __FUNCTION__, __LINE__);
    kfree(dev);
-   kfree(urbInfo.myData);
 
    printk(KERN_ALERT"Laboratoire2_disconnect (%s:%u) => USB DISCONNECTED\n", __FUNCTION__, __LINE__);
 }
