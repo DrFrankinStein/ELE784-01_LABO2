@@ -364,58 +364,33 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       // Get register value from the camera
       case LAB2_IOCTL_GET:      
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
-			/*GetSetStruct get_t;
-			retval = __get_user(get_t, (GetSetStruct __user *)arg);
+			GetSetStruct get_t;
+			// retval = __get_user(get_t, (GetSetStruct __user *)arg);
 
-			if(!retval)
-			{
-				retval = usb_control_msg (
-            dev, 
-            usb_rcvctrlpipe(dev, 0x00),
-            get_t.requestType,
-            USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
-            get_t.processingUnitSelector << 8,
-            0x0200,
-            NULL,
-            2,
-            0);
-			}*/
-         /*int dataToSend = 0;
-         int request;
-            //Define direction
-            switch(request)
-            {
-            case GET_CUR :
-               dataToSend = 0x81;
-               break;
-            case GET_MIN :
-               dataToSend = 0x82;
-               break;
-            case GET_MAX :
-               dataToSend = 0x83;
-               break;
-            case GET_MAX :
-               dataToSend = 0x84;
-               break;
-            }
+         int request = retval;
+
+			// request = GET_CUR = 0x81
+			// request = GET_MIN = 0x82
+			// request = GET_MAX = 0x83
+			// request = GET_RES = 0x84
 
          retval = usb_control_msg (
-            dev, 
+            dev,     
             usb_rcvctrlpipe(dev, 0x00),
-            dataToSend,
+            request,
             USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
             0x0004,
             0x0200,
             NULL,
             2,
-            0);*/
+            0);
 
          break;
 
       // Set register value to the camera
       case LAB2_IOCTL_SET:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x20);
-         /*char dataToSend[2];
+         char dataToSend[2];
          retval = usb_control_msg (
             dev, 
             usb_sndctrlpipe(dev, 0x00),
@@ -425,7 +400,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             0x0200,
             dataToSend,
             2,
-            0);*/
+            0);
          break;
       
       // Start picture acquisition
