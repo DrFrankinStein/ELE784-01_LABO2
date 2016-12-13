@@ -14,7 +14,7 @@
 // DESCRIPTION : Header code : IOCTL command list
 //               for Laboratoire2.c
 //
-// LAST MODIFICATION : Wednesday, December 7th 2016
+// LAST MODIFICATION : Tuesday, December 13th 2016
 //
 //===================================================
 
@@ -29,14 +29,15 @@ typedef enum CAM_MVT {CAM_UP, CAM_DOWN, CAM_LEFT, CAM_RIGHT} CAM_MVT;
 typedef struct GetSetStruct
 {
 	unsigned char requestType;
-	unsigned char processingUnitSelector; 
+	unsigned char processingUnitSelector;
+	unsigned char values[2]; 
 }
 GetSetStruct;
 
 #define LAB2_IOC_MAGIC 'L'
 
 // Get register value from the camera
-#define LAB2_IOCTL_GET             _IOR(LAB2_IOC_MAGIC, 0x10, GetSetStruct)
+#define LAB2_IOCTL_GET             _IORW(LAB2_IOC_MAGIC, 0x10, GetSetStruct)
 
 // Set register value to the camera
 #define LAB2_IOCTL_SET             _IOW(LAB2_IOC_MAGIC, 0x20, GetSetStruct)
