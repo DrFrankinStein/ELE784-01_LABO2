@@ -376,8 +376,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             0);
 
             if (retval > 0)
-            {
-					printk(KERN_WARNING"GET : requestType=%X processingUnitSelector=%X value=%X\n", get_t.requestType, get_t.processingUnitSelector, get_t.value);   
+            { 
                retval = __copy_to_user((void*)arg, (void*)&get_t, sizeof(GetSetStruct));
             }
          }
