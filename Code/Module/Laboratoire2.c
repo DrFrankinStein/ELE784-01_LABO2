@@ -359,6 +359,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       // Get register value from the camera
       case LAB2_IOCTL_GET:      
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
+			
          retval = __copy_from_user((void*)&get_t, (void*)arg, sizeof(GetSetStruct));
 
          if (!retval)
@@ -368,18 +369,19 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             usb_rcvctrlpipe(dev, 0x00),
             get_t.requestType,
             USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
-            get_t.processingUnitSelector,
+            get_t.processingUnitSelector << 8,
             0x0200,
             &get_t.value,
             2,
             0);
 
             if (retval > 0)
-            {      
+            {
+					printk(KERN_WARNING"GET : requestType=%X processingUnitSelector=%X value=%X\n", get_t.requestType, get_t.processingUnitSelector, get_t.value);   
                retval = __copy_to_user((void*)arg, (void*)&get_t, sizeof(GetSetStruct));
             }
          }
-
+				
          break;
 
       // Set register value to the camera
@@ -406,8 +408,8 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
                2,
                0);
             }
-         }
-
+         }		
+			
          break;
       
       // Start picture acquisition

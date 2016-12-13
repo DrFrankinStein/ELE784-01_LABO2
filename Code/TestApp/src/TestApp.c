@@ -18,6 +18,7 @@
 //
 //===================================================
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
@@ -38,10 +39,25 @@
 #define TIMER_NS 5000000
 #define MAX_PERIOD 12000
 
+typedef struct CamInfo
+{
+   char     name[50];
+   uint16_t min;
+   uint16_t max;
+   uint16_t res;
+   uint16_t cur;
+} CamInfo;
+
+int getInfoTypeSize = 3, getInfoCmdSize = 4;
+uint8_t getInfoType[3] = {PU_BRIGHTNESS_CONTROL, PU_CONTRAST_CONTROL, PU_GAIN_CONTROL};
+uint8_t getInfoCmd[4] = {GET_MIN, GET_MAX, GET_RES, GET_CUR};
+
 enum CommonList {Quit = 'q', EmptyCmd = -1};
 
 enum OptionsMainMenuList { IoctlMenuId = '1',
-                           TestPhoto = '2',};
+                           TestPhoto,
+                           TestCamMove,
+                           TestGetSet, };
 
 enum OptionsIoctlMenuList { IoctlGet = '1',
                             IoctlSet,
@@ -53,7 +69,14 @@ enum OptionsIoctlMenuList { IoctlGet = '1',
                             IoctlPanTilt_LEFT = 'a',
                             IoctlPanTilt_RIGHT = 'd',
                             IoctlPanTiltReset = 'x',
-                            IoctlClearDisplay = 'c',};
+                            IoctlClearDisplay = 'c', };
+
+enum OptionMoveMenuList { MovePanTilt_UP = 'w',
+                          MovePanTilt_DOWN = 's',
+                          MovePanTilt_LEFT = 'a',
+                          MovePanTilt_RIGHT = 'd',
+                          MovePanTiltReset = 'x',
+                          MoveClearDisplay = 'c', };
 int isMainSemUsed = 0;
 sem_t MainSem;
 
@@ -165,7 +188,7 @@ int TestPictureCamSaveInTMP(void)
    unsigned char *finalBuf;
    int size;
 
-   sprintf(name,"/tmp/test%i.jpg",index++);
+   sprintf(name,"/tmp/TestPhoto%i.jpg",index++);
 
    inBuffer = malloc((42666) * sizeof(unsigned char));
    finalBuf = malloc((42666 * 2) * sizeof(unsigned char));
@@ -210,6 +233,331 @@ int TestPictureCamSaveInTMP(void)
       return -1;
    }
 }
+
+void MoveCameraMenu(void)
+{
+   char cmd = EmptyCmd;
+   int eval;
+   int displayRefresh = 1;
+
+   while (cmd != Quit)
+   {
+     if (displayRefresh)
+     {
+      CLR_SCREEN;
+
+      printf("\nMOVE CAMERA MENU :");
+     }
+      //Test if we can open port
+      int fd = open("/dev/etsele_cdev", O_RDONLY);
+
+      if(fd < 0)
+      {
+         printf("ERROR opening the driver...(%s)\n", strerror(fd));
+         PressAnyKeyToContinue();
+         return;
+      }
+      else
+      {
+         close(fd);
+
+         if(displayRefresh)
+         {
+          printf("\nPlease make a selection : \n");
+
+          printf("\n\nMove Camera :");
+          printf("\n(%c) - UP", MovePanTilt_UP);
+          printf("\n(%c) - DOWN", MovePanTilt_DOWN);
+          printf("\n(%c) - LEFT", MovePanTilt_LEFT);
+          printf("\n(%c) - RIGHT", MovePanTilt_RIGHT);
+          printf("\n(%c) - RESET", MovePanTiltReset);
+          printf("\n\n(%c) - Clear Display", MoveClearDisplay);
+          printf("\n(%c) - Quit", Quit);
+          printf("\n\nMake a selection : ");
+          displayRefresh = 0;
+         }
+
+         cmd = WaitForKeyPressed();
+
+         switch (cmd)
+         {
+            case MovePanTilt_UP:
+            case MovePanTilt_DOWN:
+            case MovePanTilt_LEFT:
+            case MovePanTilt_RIGHT:
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  CAM_MVT dir;
+                  switch (cmd)
+                  {
+                  case MovePanTilt_UP:
+                     dir = CAM_UP;
+                     break;
+                  case MovePanTilt_DOWN:
+                     dir = CAM_DOWN;
+                     break;
+                  case MovePanTilt_LEFT:
+                     dir = CAM_LEFT;
+                     break;
+                  case MovePanTilt_RIGHT:
+                     dir = CAM_RIGHT;
+                     break;
+                  }
+
+                  if((eval = ioctl(fd, LAB2_IOCTL_PANTILT, &dir)) < 0)
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_PANTILT_RESET...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+               break;
+
+            case MovePanTiltReset :
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  if((eval = ioctl(fd, LAB2_IOCTL_PANTILT_RESET)) < 0)
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_PANTILT_RESET...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+
+            break;
+
+            case MoveClearDisplay:
+               displayRefresh = 1;
+               break;
+         }
+      }
+   }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void CameraOptionMenu(void)
+{
+
+   CamInfo gain = {.name = "Gain"}, brightness = {.name = "Brightness"}, contrast = {.name = "Contrast"};
+   CamInfo info[3] = {brightness, contrast, gain};
+   GetSetStruct getset;
+
+   char cmd = EmptyCmd;
+   int eval;
+   int displayRefresh = 1;
+   int i, j;
+
+   while (cmd != Quit)
+   {
+     if (displayRefresh)
+     {
+      CLR_SCREEN;
+
+      printf("\nIOCTL MENU :");
+     }
+      //Test if we can open port
+      int fd = open("/dev/etsele_cdev", O_RDONLY);
+
+      if(fd < 0)
+      {
+         printf("ERROR opening the driver...(%s)\n", strerror(fd));
+         PressAnyKeyToContinue();
+         return;
+      }
+      else
+      {
+         close(fd);
+
+         if(displayRefresh)
+         {
+          printf("\nPlease make a selection : \n");
+
+          fd = open("/dev/etsele_cdev", O_RDONLY);
+
+          if(fd < 0)
+          {
+             printf("\n\nERROR Getting info...(%s)\n", strerror(fd));
+          }
+          else
+          {
+             for (i = 0; i < getInfoTypeSize; i++)
+             for (j = 0; j < getInfoCmdSize; j++)
+             {
+                getset.processingUnitSelector = getInfoType[i];
+                getset.requestType = getInfoCmd[j];
+
+                if((eval = ioctl(fd, LAB2_IOCTL_GET,&getset)))
+                {
+                   printf("\n\nERROR calling ioctl LAB2_IOCTL_GET...(%s)\n", strerror(eval));
+                }
+                else
+                {
+                   printf("\n%X %X %X", getset.value, getset.requestType, getset.processingUnitSelector);
+                }
+             }
+
+
+             close(fd);
+          }
+
+
+          printf("\n(%c) - IoctlSet", IoctlSet );
+          printf("\n(%c) - IoctlStreamOn", IoctlStreamOn );
+          printf("\n(%c) - IoctlStreamOff", IoctlStreamOff );
+          printf("\n\n(%c) - Clear Display", IoctlClearDisplay);
+          printf("\n(%c) - Quit", Quit);
+          printf("\n\nMake a selection : ");
+          displayRefresh = 0;
+         }
+
+         cmd = WaitForKeyPressed();
+
+         switch (cmd)
+         {
+            /*case IoctlGet :
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  if((eval = ioctl(fd, LAB2_IOCTL_GET)))
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_GET...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  else
+                  {
+                     printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_GET...\n");
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+
+            break;*/
+
+            case IoctlSet :
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  if((eval = ioctl(fd, LAB2_IOCTL_SET)))
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_SET...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  else
+                  {
+                     printf("\n\nSUCCESS calling ioctl LAB2_IOCTL_SET...\n");
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+
+            break;
+
+            case IoctlStreamOn :
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  if((eval = ioctl(fd, LAB2_IOCTL_STREAMON)))
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_STREAMON...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+
+            break;
+
+            case IoctlStreamOff :
+               fd = open("/dev/etsele_cdev", O_RDONLY);
+
+               if(fd < 0)
+               {
+                  printf("\n\nERROR opening the driver...(%s)\n", strerror(fd));
+                  PressAnyKeyToContinue();
+                  displayRefresh = 1;
+               }
+               else
+               {
+                  if((eval = ioctl(fd, LAB2_IOCTL_STREAMOFF)))
+                  {
+                     printf("\n\nERROR calling ioctl LAB2_IOCTL_STREAMOFF...(%s)\n", strerror(eval));
+                     PressAnyKeyToContinue();
+                     displayRefresh = 1;
+                  }
+                  close(fd);
+               }
+
+            break;
+
+            case IoctlClearDisplay:
+               displayRefresh = 1;
+               break;
+         }
+      }
+   }
+}
+
+
+
+
+
+
+
+
+
 
 void IoctlMenu(void)
 {
@@ -536,7 +884,9 @@ int main (int argc, char *argv[])
       printf("\nPlease make a selection : \n");
 
       printf("\n(%c) - IOCTL", IoctlMenuId );
-      printf("\n(%c) - TestPhoto", TestPhoto );
+      printf("\n(%c) - Take photo and save it to /tmp", TestPhoto );
+      printf("\n(%c) - Move Camera", TestCamMove );
+      printf("\n(%c) - Check or edit camera option", TestGetSet );
       printf("\n\n(%c) - Quit", Quit);
       printf("\n\nMake a selection : ");
 
@@ -549,6 +899,12 @@ int main (int argc, char *argv[])
          break;
       case TestPhoto:
          TestPictureCamSaveInTMP();
+         break;
+      case TestCamMove:
+         MoveCameraMenu();
+         break;
+      case TestGetSet:
+         CameraOptionMenu();
          break;
       }
    }

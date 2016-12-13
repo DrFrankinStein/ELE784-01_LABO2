@@ -30,7 +30,7 @@ typedef struct GetSetStruct
 {
 	uint8_t requestType;
 	uint8_t processingUnitSelector;
-	uint16_t value; 
+	int16_t value; 
 }
 GetSetStruct;
 
