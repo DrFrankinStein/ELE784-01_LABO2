@@ -321,6 +321,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
    struct usb_device *dev = interface_to_usbdev(intf);
    struct usb_ele784 *structPerso = usb_get_intfdata(intf);
    unsigned char data[4];
+   GetSetStruct get_t;
 
    int err = 0;
    int retval = 0;
@@ -358,8 +359,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       // Get register value from the camera
       case LAB2_IOCTL_GET:      
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x10);
-         GetSetStruct get_t;
-         retval = __get_user(get_t, (GetSetStruct __user *)arg);
+         retval = __copy_from_user((void*)&get_t, (void*)arg, sizeof(GetSetStruct));
 
          if (!retval)
          {
@@ -370,13 +370,13 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
             USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
             get_t.processingUnitSelector,
             0x0200,
-            get_t.values,
+            &get_t.value,
             2,
             0);
 
             if (retval > 0)
             {      
-               __put_user(get_t, (GetSetStruct __user *)arg);
+               retval = __copy_to_user((void*)arg, (void*)&get_t, sizeof(GetSetStruct));
             }
          }
 
@@ -385,9 +385,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
       // Set register value to the camera
       case LAB2_IOCTL_SET:
          printk(KERN_WARNING"Calling : %s(%X)\n",__FUNCTION__, 0x20);
-         
-         GetSetStruct get_t;
-         retval = __get_user(get_t, (GetSetStruct __user *)arg);
+         retval = __copy_from_user((void*)&get_t, (void*)arg, sizeof(GetSetStruct));
          
          if (!retval)
          {
@@ -404,7 +402,7 @@ static long ele784_ioctl (struct file *filp, unsigned int cmd, unsigned long arg
                USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
                get_t.processingUnitSelector << 8,
                0x0200,
-               get_t.values,
+               &get_t.value,
                2,
                0);
             }
